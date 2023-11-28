@@ -93,10 +93,26 @@ contract OracleV0 with Deployable {
         // TODO: Tick
         // Create an alarm by sending Tock message
 
+        /*
+            forward_payload: Slice;
+            Tick:
+                msgType: Int
+                creator: Address
+            Wind:
+                msgType: Int
+                alarmIndex: Int
+        */
         let ctx: Context = context();
         require(ctx.sender == self.oracleToken1Address, "Only oracle token1 wallet can send notification to oracle");
-        self.token0Amount = self.token0Amount + ctx.value;
-        self.token1Amount = self.token1Amount + msg.amount;
+        let tmpSlice: Slice = msg.forward_payload;
+        let msgType: Int = tmpSlice.loadUint(8); // 0 means Tick, 1 means Wind
+        if (msgType == 0) {
+            self.token0Amount = self.token0Amount + ctx.value;
+            self.token1Amount = self.token1Amount + msg.amount;
+            let creator: Address = tmpSlice.loadAddress();
+            self._createAlarm(creator);
+            self.totalAlarms = self.totalAlarms + 1;
+        }
 
         // TODO: Wind
         // TimeKeepers send Reset message to the alarm, reply with Sync message
@@ -156,13 +172,28 @@ contract OracleV0 with Deployable {
         }
     }
 
-    inline fun calculateAlarmInit(index: Int, oracleAddress: Address): StateInit {
-        return initOf Alarm(index, oracleAddress);
+    inline fun _calculateAlarmInit(index: Int): StateInit {
+        return initOf Alarm(index, myAddress());
     }
 
-    inline fun getAlarmAddress(index: Int): Address {
-        let initCode: StateInit = self.calculateAlarmInit(index, myAddress());
+    get fun getAlarmAddress(index: Int): Address {
+        let initCode: StateInit = self._calculateAlarmInit(index);
         return contractAddress(initCode);
+    }
+
+    inline fun _createAlarm(creator: Address) {
+        let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
+        send(SendParameters{
+            to: contractAddress(initCode),
+            value: 0,
+            bounce: true,
+            mode: SendRemainingValue,
+            body: Tock{ 
+                creator: creator
+            }.toCell(),
+            code: initCode.code,
+            data: initCode.data
+        });
     }
 
     get fun TotalAmount(): Int {
