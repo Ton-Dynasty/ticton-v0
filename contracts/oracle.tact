@@ -9,6 +9,11 @@ message Wind {
 message Reset {
 }
 message Sync {
+    token0Value: Int;
+    token0Scale: Int;
+    token1Value: Int;
+    token1Scale: Int;
+    timestamp: Int;
 }
 message Ring {
 }
@@ -116,7 +121,7 @@ contract OracleV0 with Deployable {
         }
     }
 
-    inline fun getAlarm(index: Int): Address {}
+    inline fun getAlarm(alarmIndex: Int): Address {}
 
     get fun TotalAmount(): Int {
         return self.totalAlarms;
