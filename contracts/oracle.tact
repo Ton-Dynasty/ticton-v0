@@ -26,9 +26,17 @@ message Announce {
 }
 message Chronoshift {
 }
-message TokenNotification {
+
+message(0x7362d09c) JettonTransferNotification {
+    query_id: Int as uint64;                // arbitrary request number
+    amount: Int as coins;                   // amount of jettons to transfer
+    sender: Address;                        // address of the sender of the jettons
+    forward_payload: Slice as remaining;    // optional custom payload
 }
 
+message OracleToken1Wallet {
+    oracleToken1Address: Address;
+}
 contract Alarm {
     index: Int = 0;
     owner: Address? = null;
@@ -55,20 +63,36 @@ contract Alarm {
 }
 
 contract OracleV0 with Deployable {
-    token0: Address;
-    token1: Address;
+    token0: Address; // ton
+    token1: Address; // usdt
     totalAlarms: Int = 0;
     lastPrice0: Int = 0;
     lastPrice1: Int = 0;
     lastTimestamp: Int = 0;
+    token0Amount: Int = 0;
+    token1Amount: Int = 0;
+    oracleToken1Address: Address? = null;
     init(token0: Address, token1: Address){
         self.token0 = token0;
         self.token1 = token1;
     }
 
-    receive(msg: TokenNotification){
+    // Set Oracle Token1 Wallet Address, so that oracle can make sure it received token1 from the wallet
+    receive(msg: OracleToken1Wallet){
+        if(self.oracleToken1Address == null){
+            self.oracleToken1Address = msg.oracleToken1Address;
+        }
+    }
+
+    receive(msg: JettonTransferNotification){
         // TODO: Tick
         // Create an alarm by sending Tock message
+
+        let ctx: Context = context();
+        require(ctx.sender == self.oracleToken1Address, "Only oracle token1 wallet can send notification to oracle");
+        self.token0Amount = self.token0Amount + ctx.value;
+        self.token1Amount = self.token1Amount + msg.amount;
+
         // TODO: Wind
         // TimeKeepers send Reset message to the alarm, reply with Sync message
     }
@@ -116,7 +140,14 @@ contract OracleV0 with Deployable {
         }
     }
 
-    inline fun getAlarm(index: Int): Address {}
+    inline fun calculate_jetton_wallet_init(index: Int): StateInit {
+        return initOf Alarm(index);
+    }
+
+    inline fun getAlarm(index: Int): Address {
+        let initCode: StateInit = self.calculate_jetton_wallet_init(owner_address);
+        return contractAddress(initCode);
+    }
 
     get fun TotalAmount(): Int {
         return self.totalAlarms;
