@@ -9,6 +9,11 @@ message Wind {
 message Reset {
 }
 message Sync {
+    token0Value: Int;
+    token0Scale: Int;
+    token1Value: Int;
+    token1Scale: Int;
+    timestamp: Int;
 }
 message Ring {
     queryID: Int;
