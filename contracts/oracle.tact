@@ -8,8 +8,8 @@ message Tick {
 }
 message Tock {
     watchmaker: Address;
-    token0Amount: Int;
     token1Amount: Int;
+    token0Threshold: Int;
 }
 message Wind {
 }
@@ -54,20 +54,24 @@ message OracleToken1Wallet {
 contract Alarm {
     index: Int = 0;
     oracleAddress: Address? = null;
-    token0Amount: Int = 0;
+    token0Threshold: Int = 0;
     token1Amount: Int = 0;
-    watchmaker: Address? = null;
+    token0Scale: Int = 0;
+    token1Scale: Int = 0;
+    watchmaker: Address;
     init(index: Int, oracleAddress: Address){
         self.index = index;
         self.oracleAddress = oracleAddress;
+        self.watchmaker = newAddress(0, 0);
     }
 
     receive(msg: Tock){
         require(self.oracleAddress == null, "Alarm already claimed");
         self.watchmaker = msg.watchmaker;
         // TODO: You know what to do
-        self.token0Amount = msg.token0Amount;
+        self.token0Threshold = msg.token0Threshold;
         self.token1Amount = msg.token1Amount;
+        self.watchmaker = msg.watchmaker;
     }
 
     receive(msg: Reset){
@@ -121,28 +125,39 @@ contract OracleV0 with Deployable {
             // TODO: Return jetton back if gas is enough
             return ;
         }
-        // TODO: Tick
-        // Create an alarm by sending Tock message
-
-        /*
-            forward_payload: Slice;
-            Tick:
-                msgType: Int
-                creator: Address
-            Wind:
-                msgType: Int
-                alarmIndex: Int
-        */
         let ctx: Context = context();
         require(ctx.sender == self.token1Wallet, "Only oracle token1 wallet can send notification to oracle");
-        require(ctx.value > ton("1"), "Insufficient fee");
+        require(ctx.value > self.token0Threshold, "Insufficient fee");
         let tmpSlice: Slice = msg.forward_payload;
         let msgType: Int = tmpSlice.loadUint(8); // 0 means Tick, 1 means Wind
-        let remainToken0Amount: Int = (ctx.value - ton("1")); // TODO: ctx.value have to sub the operation fee
+        let remainToken0Amount: Int = (ctx.value - self.token0Threshold); // TODO: ctx.value have to sub the operation fee
         let token1Amount: Int = msg.amount;
         if (msgType == 0) {
+            // TODO: Tick
+            // Create an alarm by sending Tock message
+            // forward_payload: Slice;
+            // Tick:
+            //     msgType: Int
+            //     creator: Address
+            // Wind:
+            //     msgType: Int
+            //     alarmIndex: Int
             let watchmaker: Address = tmpSlice.loadAddress();
-            self._createAlarm(watchmaker, 1, token1Amount); // tonAmount: ctx.value, token1Amount: msg.amount
+            let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
+            send(SendParameters{
+                    to: contractAddress(initCode),
+                    value: 0,
+                    bounce: true,
+                    mode: SendRemainingValue,
+                    body: Tock{
+                        watchmaker: watchmaker,
+                        token1Amount: token1Amount,
+                        token0Threshold: self.token0Threshold
+                    }.toCell(),
+                    code: initCode.code,
+                    data: initCode.data
+                }
+            );
             self.totalAlarms = (self.totalAlarms + 1);
         }
 
@@ -152,7 +167,7 @@ contract OracleV0 with Deployable {
 
     receive(msg: Sync){
         require(self.is_initialized == true, "Not initialized");
-        // TODO: update lastPrice0, lastPrice1, lastTimestamp by formula
+        self.sync();
     }
 
     receive(msg: Ring){
@@ -188,21 +203,31 @@ contract OracleV0 with Deployable {
             );
             return ;
         }
-        // if (msg.quoteIndex == 1) {
-        //     send(SendParameters{
-        //             to: sender(),
-        //             value: 0,
-        //             mode: SendRemainingValue,
-        //             body: Announce{
-        //                 queryID: msg.queryID,
-        //                 quoteAsset: self.token1,
-        //                 timestamp: self.lastTimestamp,
-        //                 price: self.lastPrice1
-        //             }.toCell()
-        //         }
-        //     );
-        //     return ;
-        // }
+        if (msg.quoteIndex == 1) {
+            // send(SendParameters{
+            //         to: sender(),
+            //         value: 0,
+            //         mode: SendRemainingValue,
+            //         body: Announce{
+            //             queryID: msg.queryID,
+            //             quoteAsset: self.token1,
+            //             timestamp: self.lastTimestamp,
+            //             price: self.lastPrice1
+            //         }.toCell()
+            //     }
+            // );
+            return ;
+        }
+    }
+
+    receive(msg: Chronoshift){
+        self.sync();
+
+        // TODO: Transfer the remaining funds and rewards to the Watchmaker
+    }
+
+    inline fun sync() {
+        // TODO: update lastPrice0, lastPrice1, lastTimestamp by formula
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {
@@ -212,20 +237,6 @@ contract OracleV0 with Deployable {
     get fun getAlarmAddress(index: Int): Address {
         let initCode: StateInit = self._calculateAlarmInit(index);
         return contractAddress(initCode);
-    }
-
-    inline fun _createAlarm(watchmaker: Address, token0Amount: Int, token1Amount: Int) {
-        let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
-        send(SendParameters{
-                to: contractAddress(initCode),
-                value: 0,
-                bounce: true,
-                mode: SendRemainingValue,
-                body: Tock{watchmaker: watchmaker, token0Amount: token0Amount, token1Amount: token1Amount}.toCell(),
-                code: initCode.code,
-                data: initCode.data
-            }
-        );
     }
 
     get fun TotalAmount(): Int {
