@@ -1,4 +1,9 @@
 import "@stdlib/deploy";
+message Initialize {
+    token0Wallet: Address;
+    token1Wallet: Address;
+    token0Threshold: Int; // The minimum token0 to toc an alarm
+}
 message Tick {
 }
 message Tock {
@@ -34,17 +39,16 @@ message Announce {
 }
 message Chronoshift {
 }
-
 message(0x7362d09c) JettonTransferNotification {
-    query_id: Int as uint64;                // arbitrary request number
-    amount: Int as coins;                   // amount of jettons to transfer
-    sender: Address;                        // address of the sender of the jettons
-    forward_payload: Slice as remaining;    // optional custom payload
+    query_id: Int as uint64; // arbitrary request number
+    amount: Int as coins; // amount of jettons to transfer
+    sender: Address; // address of the sender of the jettons
+    forward_payload: Slice as remaining; // optional custom payload
 }
-
 message OracleToken1Wallet {
     oracleToken1Address: Address;
 }
+
 contract Alarm {
     index: Int = 0;
     oracleAddress: Address? = null;
@@ -73,45 +77,61 @@ contract Alarm {
 }
 
 contract OracleV0 with Deployable {
+    // deploy
+    manager: Address;
+    // initialize
+    is_initialized: Bool;
     token0: Address; // ton
     token1: Address; // usdt
+    token0Wallet: Address;
+    token1Wallet: Address;
+    token0Threshold: Int;
+    // calculated
     totalAlarms: Int = 0;
     lastPrice0: Int = 0;
-    lastPrice1: Int = 0;
     lastTimestamp: Int = 0;
-    token0Amount: Int = 0;
-    token1Amount: Int = 0;
-    oracleToken1Address: Address? = null;
     init(token0: Address, token1: Address){
+        self.manager = sender();
+        self.is_initialized = false;
         self.token0 = token0;
         self.token1 = token1;
+        self.token0Wallet = newAddress(0, 0);
+        self.token1Wallet = newAddress(0, 0);
+        self.token0Threshold = 0;
     }
 
-    // Set Oracle Token1 Wallet Address, so that oracle can make sure it received token1 from the wallet
-    receive(msg: OracleToken1Wallet){
-        if(self.oracleToken1Address == null){
-            self.oracleToken1Address = msg.oracleToken1Address;
-        }
+    receive(msg: Initialize){
+        require(self.is_initialized == false, "Already initialized");
+        require(sender() == self.manager, "Only manager can initialize");
+        self.is_initialized = true;
+        self.token0Wallet = msg.token0Wallet;
+        self.token1Wallet = msg.token1Wallet;
+        self.token0Threshold = msg.token0Threshold;
     }
 
     receive(msg: JettonTransferNotification){
+        if (self.is_initialized == false) {
+            // TODO: Return jetton back if gas is enough
+            return ;
+        }
         // TODO: Tick
         // Create an alarm by sending Tock message
-
         let ctx: Context = context();
         require(ctx.sender == self.oracleToken1Address, "Only oracle token1 wallet can send notification to oracle");
-        self.token0Amount = self.token0Amount + ctx.value;
-        self.token1Amount = self.token1Amount + msg.amount;
+        self.token0Amount = (self.token0Amount + ctx.value);
+        self.token1Amount = (self.token1Amount + msg.amount);
 
         // TODO: Wind
         // TimeKeepers send Reset message to the alarm, reply with Sync message
     }
 
     receive(msg: Sync){
+        require(self.is_initialized == true, "Not initialized");
         // TODO: update lastPrice0, lastPrice1, lastTimestamp by formula
     }
 
     receive(msg: Ring){
+        require(self.is_initialized == true, "Not initialized");
         // TODO: Watchmaker sends Ring message to Mute a specific alarm
         require(msg.alarmIndex < self.totalAlarms, "alarmIndex out of range");
         let alarmAddress: Address = self.getAlarmAddress(msg.alarmIndex);
@@ -119,14 +139,13 @@ contract OracleV0 with Deployable {
                 to: alarmAddress,
                 value: 0,
                 mode: SendRemainingValue,
-                body: Mute{
-                    queryID: msg.queryID
-                }.toCell()
+                body: Mute{queryID: msg.queryID}.toCell()
             }
         );
     }
 
     receive(msg: Check){
+        require(self.is_initialized == true, "Not initialized");
         // TODO: Protocols send Check message to query the price
         require(msg.quoteIndex == 0 && msg.quoteIndex == 1, "quoteIndex must be either 0 or 1");
         if (msg.quoteIndex == 0) {
