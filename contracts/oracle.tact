@@ -2,7 +2,7 @@ import "@stdlib/deploy";
 message Tick {
 }
 message Tock {
-    creator: Address;
+    watchmaker: Address;
     token0Amount: Int;
     token1Amount: Int;
 }
@@ -50,6 +50,9 @@ message OracleToken1Wallet {
 contract Alarm {
     index: Int = 0;
     oracleAddress: Address? = null;
+    token0Amount: Int = 0;
+    token1Amount: Int = 0;
+    watchmaker: Address? = null;
     init(index: Int, oracleAddress: Address){
         self.index = index;
         self.oracleAddress = oracleAddress;
@@ -57,8 +60,10 @@ contract Alarm {
 
     receive(msg: Tock){
         require(self.oracleAddress == null, "Alarm already claimed");
-        self.oracleAddress = msg.creator;
+        self.watchmaker = msg.watchmaker;
         // TODO: You know what to do
+        self.token0Amount = msg.token0Amount;
+        self.token1Amount = msg.token1Amount;
     }
 
     receive(msg: Reset){
@@ -108,11 +113,14 @@ contract OracleV0 with Deployable {
         */
         let ctx: Context = context();
         require(ctx.sender == self.oracleToken1Address, "Only oracle token1 wallet can send notification to oracle");
+        require(ctx.value > ton("1"), "Insufficient fee");
         let tmpSlice: Slice = msg.forward_payload;
         let msgType: Int = tmpSlice.loadUint(8); // 0 means Tick, 1 means Wind
+        let remainToken0Amount: Int = ctx.value - ton("1"); // TODO: ctx.value have to sub the operation fee
+        let token1Amount: Int = msg.amount;
         if (msgType == 0) {
-            let creator: Address = tmpSlice.loadAddress();
-            self._createAlarm(creator, ctx.value, msg.amount);
+            let watchmaker: Address = tmpSlice.loadAddress();
+            self._createAlarm(watchmaker, 1, token1Amount); // tonAmount: ctx.value, token1Amount: msg.amount
             self.totalAlarms = self.totalAlarms + 1;
         }
 
@@ -183,7 +191,7 @@ contract OracleV0 with Deployable {
         return contractAddress(initCode);
     }
 
-    inline fun _createAlarm(creator: Address, token0Amount: Int, token1Amount: Int) {
+    inline fun _createAlarm(watchmaker: Address, token0Amount: Int, token1Amount: Int) {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
             to: contractAddress(initCode),
@@ -191,7 +199,7 @@ contract OracleV0 with Deployable {
             bounce: true,
             mode: SendRemainingValue,
             body: Tock{ 
-                creator: creator,
+                watchmaker: watchmaker,
                 token0Amount: token0Amount,
                 token1Amount: token1Amount
             }.toCell(),
