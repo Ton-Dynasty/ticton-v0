@@ -3,6 +3,8 @@ message Tick {
 }
 message Tock {
     creator: Address;
+    token0Amount: Int;
+    token1Amount: Int;
 }
 message Wind {
 }
@@ -110,7 +112,7 @@ contract OracleV0 with Deployable {
         let msgType: Int = tmpSlice.loadUint(8); // 0 means Tick, 1 means Wind
         if (msgType == 0) {
             let creator: Address = tmpSlice.loadAddress();
-            self._createAlarm(creator);
+            self._createAlarm(creator, ctx.value, msg.amount);
             self.totalAlarms = self.totalAlarms + 1;
         }
 
@@ -155,21 +157,21 @@ contract OracleV0 with Deployable {
             );
             return ;
         }
-        if (msg.quoteIndex == 1) {
-            send(SendParameters{
-                    to: sender(),
-                    value: 0,
-                    mode: SendRemainingValue,
-                    body: Announce{
-                        queryID: msg.queryID,
-                        quoteAsset: self.token1,
-                        timestamp: self.lastTimestamp,
-                        price: self.lastPrice1
-                    }.toCell()
-                }
-            );
-            return ;
-        }
+        // if (msg.quoteIndex == 1) {
+        //     send(SendParameters{
+        //             to: sender(),
+        //             value: 0,
+        //             mode: SendRemainingValue,
+        //             body: Announce{
+        //                 queryID: msg.queryID,
+        //                 quoteAsset: self.token1,
+        //                 timestamp: self.lastTimestamp,
+        //                 price: self.lastPrice1
+        //             }.toCell()
+        //         }
+        //     );
+        //     return ;
+        // }
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {
@@ -181,7 +183,7 @@ contract OracleV0 with Deployable {
         return contractAddress(initCode);
     }
 
-    inline fun _createAlarm(creator: Address) {
+    inline fun _createAlarm(creator: Address, token0Amount: Int, token1Amount: Int) {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
             to: contractAddress(initCode),
@@ -189,7 +191,9 @@ contract OracleV0 with Deployable {
             bounce: true,
             mode: SendRemainingValue,
             body: Tock{ 
-                creator: creator
+                creator: creator,
+                token0Amount: token0Amount,
+                token1Amount: token1Amount
             }.toCell(),
             code: initCode.code,
             data: initCode.data
