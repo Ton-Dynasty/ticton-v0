@@ -42,15 +42,15 @@ message OracleToken1Wallet {
 }
 contract Alarm {
     index: Int = 0;
-    owner: Address? = null;
+    oracleAddress: Address? = null;
     init(index: Int, oracleAddress: Address){
         self.index = index;
         self.oracleAddress = oracleAddress;
     }
 
     receive(msg: Tock){
-        require(self.owner == null, "Alarm already claimed");
-        self.owner = msg.creator;
+        require(self.oracleAddress == null, "Alarm already claimed");
+        self.oracleAddress = msg.creator;
         // TODO: You know what to do
     }
 
@@ -109,7 +109,7 @@ contract OracleV0 with Deployable {
     receive(msg: Ring){
         // TODO: Watchmaker sends Ring message to Mute a specific alarm
         require(msg.alarmIndex < self.totalAlarms, "alarmIndex out of range");
-        alarmAddress: Address = getAlarm(msg.alarmIndex);
+        let alarmAddress: Address = self.getAlarmAddress(msg.alarmIndex);
         send(SendParameters{
                 to: alarmAddress,
                 value: 0,
@@ -156,14 +156,12 @@ contract OracleV0 with Deployable {
         }
     }
 
-    inline fun calculate_jetton_wallet_init(index: Int): StateInit {
-        return initOf Alarm(index);
+    inline fun calculateAlarmInit(index: Int, oracleAddress: Address): StateInit {
+        return initOf Alarm(index, oracleAddress);
     }
 
-    inline fun getAlarm(index: Int): Address {
-        
-    
-        let initCode: StateInit = self.calculate_jetton_wallet_init(owner_address);
+    inline fun getAlarmAddress(index: Int): Address {
+        let initCode: StateInit = self.calculateAlarmInit(index, myAddress());
         return contractAddress(initCode);
     }
 
