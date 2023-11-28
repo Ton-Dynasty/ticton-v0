@@ -11,6 +11,8 @@ message Reset {
 message Sync {
 }
 message Ring {
+    queryID: Int;
+    alarmIndex: Int; // to get the alarm address, call getAlarm(alarmIndex)
 }
 message Mute {
 }
@@ -51,6 +53,7 @@ contract Alarm {
         // TODO: When a Watchmaker wishes to mute an alarm
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
+
     }
 }
 
