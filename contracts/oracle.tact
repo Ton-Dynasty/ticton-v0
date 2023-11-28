@@ -15,6 +15,7 @@ message Ring {
     alarmIndex: Int; // to get the alarm address, call getAlarm(alarmIndex)
 }
 message Mute {
+    queryID: Int;
 }
 message Check {
     queryID: Int;
@@ -34,8 +35,9 @@ message TokenNotification {
 contract Alarm {
     index: Int = 0;
     owner: Address? = null;
-    init(index: Int){
+    init(index: Int, oracleAddress: Address){
         self.index = index;
+        self.oracleAddress = oracleAddress;
     }
 
     receive(msg: Tock){
@@ -53,7 +55,7 @@ contract Alarm {
         // TODO: When a Watchmaker wishes to mute an alarm
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
-
+        require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
     }
 }
 
@@ -82,6 +84,17 @@ contract OracleV0 with Deployable {
 
     receive(msg: Ring){
         // TODO: Watchmaker sends Ring message to Mute a specific alarm
+        require(msg.alarmIndex < self.totalAlarms, "alarmIndex out of range");
+        alarmAddress: Address = getAlarm(msg.alarmIndex);
+        send(SendParameters{
+                to: alarmAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                body: Mute{
+                    queryID: msg.queryID
+                }.toCell()
+            }
+        );
     }
 
     receive(msg: Check){
