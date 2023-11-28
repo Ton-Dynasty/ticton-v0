@@ -16,8 +16,11 @@ message Sync {
     timestamp: Int;
 }
 message Ring {
+    queryID: Int;
+    alarmIndex: Int; // to get the alarm address, call getAlarm(alarmIndex)
 }
 message Mute {
+    queryID: Int;
 }
 message Check {
     queryID: Int;
@@ -31,19 +34,28 @@ message Announce {
 }
 message Chronoshift {
 }
-message TokenNotification {
+
+message(0x7362d09c) JettonTransferNotification {
+    query_id: Int as uint64;                // arbitrary request number
+    amount: Int as coins;                   // amount of jettons to transfer
+    sender: Address;                        // address of the sender of the jettons
+    forward_payload: Slice as remaining;    // optional custom payload
 }
 
+message OracleToken1Wallet {
+    oracleToken1Address: Address;
+}
 contract Alarm {
     index: Int = 0;
-    owner: Address? = null;
-    init(index: Int){
+    oracleAddress: Address? = null;
+    init(index: Int, oracleAddress: Address){
         self.index = index;
+        self.oracleAddress = oracleAddress;
     }
 
     receive(msg: Tock){
-        require(self.owner == null, "Alarm already claimed");
-        self.owner = msg.creator;
+        require(self.oracleAddress == null, "Alarm already claimed");
+        self.oracleAddress = msg.creator;
         // TODO: You know what to do
     }
 
@@ -56,24 +68,41 @@ contract Alarm {
         // TODO: When a Watchmaker wishes to mute an alarm
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
+        require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
     }
 }
 
 contract OracleV0 with Deployable {
-    token0: Address;
-    token1: Address;
+    token0: Address; // ton
+    token1: Address; // usdt
     totalAlarms: Int = 0;
     lastPrice0: Int = 0;
     lastPrice1: Int = 0;
     lastTimestamp: Int = 0;
+    token0Amount: Int = 0;
+    token1Amount: Int = 0;
+    oracleToken1Address: Address? = null;
     init(token0: Address, token1: Address){
         self.token0 = token0;
         self.token1 = token1;
     }
 
-    receive(msg: TokenNotification){
+    // Set Oracle Token1 Wallet Address, so that oracle can make sure it received token1 from the wallet
+    receive(msg: OracleToken1Wallet){
+        if(self.oracleToken1Address == null){
+            self.oracleToken1Address = msg.oracleToken1Address;
+        }
+    }
+
+    receive(msg: JettonTransferNotification){
         // TODO: Tick
         // Create an alarm by sending Tock message
+
+        let ctx: Context = context();
+        require(ctx.sender == self.oracleToken1Address, "Only oracle token1 wallet can send notification to oracle");
+        self.token0Amount = self.token0Amount + ctx.value;
+        self.token1Amount = self.token1Amount + msg.amount;
+
         // TODO: Wind
         // TimeKeepers send Reset message to the alarm, reply with Sync message
     }
@@ -84,6 +113,17 @@ contract OracleV0 with Deployable {
 
     receive(msg: Ring){
         // TODO: Watchmaker sends Ring message to Mute a specific alarm
+        require(msg.alarmIndex < self.totalAlarms, "alarmIndex out of range");
+        let alarmAddress: Address = self.getAlarmAddress(msg.alarmIndex);
+        send(SendParameters{
+                to: alarmAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                body: Mute{
+                    queryID: msg.queryID
+                }.toCell()
+            }
+        );
     }
 
     receive(msg: Check){
@@ -121,7 +161,14 @@ contract OracleV0 with Deployable {
         }
     }
 
-    inline fun getAlarm(alarmIndex: Int): Address {}
+    inline fun calculateAlarmInit(index: Int, oracleAddress: Address): StateInit {
+        return initOf Alarm(index, oracleAddress);
+    }
+
+    inline fun getAlarmAddress(index: Int): Address {
+        let initCode: StateInit = self.calculateAlarmInit(index, myAddress());
+        return contractAddress(initCode);
+    }
 
     get fun TotalAmount(): Int {
         return self.totalAlarms;
