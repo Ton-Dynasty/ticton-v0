@@ -77,10 +77,7 @@ contract OracleV0 with Deployable {
     token1: Address; // usdt
     totalAlarms: Int = 0;
     lastPrice0: Int = 0;
-    lastPrice1: Int = 0;
     lastTimestamp: Int = 0;
-    token0Amount: Int = 0;
-    token1Amount: Int = 0;
     oracleToken1Address: Address? = null;
     init(token0: Address, token1: Address){
         self.token0 = token0;
@@ -112,8 +109,6 @@ contract OracleV0 with Deployable {
         let tmpSlice: Slice = msg.forward_payload;
         let msgType: Int = tmpSlice.loadUint(8); // 0 means Tick, 1 means Wind
         if (msgType == 0) {
-            self.token0Amount = self.token0Amount + ctx.value;
-            self.token1Amount = self.token1Amount + msg.amount;
             let creator: Address = tmpSlice.loadAddress();
             self._createAlarm(creator);
             self.totalAlarms = self.totalAlarms + 1;
