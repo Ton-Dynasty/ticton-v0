@@ -132,7 +132,9 @@ contract OracleV0 with Deployable {
         }
     }
 
-    inline fun getAlarm(index: Int): Address {}
+    inline fun getAlarm(index: Int): Address {
+        return contractAddress(initOf(Alarm(index, myaddress())));
+    }
 
     get fun TotalAmount(): Int {
         return self.totalAlarms;
