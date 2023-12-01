@@ -16,11 +16,12 @@ message Tock {
     baseAssetPrice: Int; // baseAsset price relative to quoteAsset (e.g. baseAssetPrice=2.5 means 1 TON = 2.5 USDT)
 }
 message Wind {
-    alarmIndex: Int;
-    buyNum: Int;
-    quoteIndex: Int; // 0 for baseAsset, 1 for quoteAsset
+    alarmIndex: Int as uint256; // the interacted alarm index
+    buyNum: Int as uint32; // how many scale to buy
+    quoteIndex: Int as uint8; // 0 for baseAsset, 1 for quoteAsset
 }
 message Reset {
+    sender: Address;
     buyNum: Int; // The number of scales to buy
     quoteIndex: Int; // 0 for baseAsset, 1 for quoteAsset
 }
@@ -64,7 +65,7 @@ message(0x7362d09c) JettonTransferNotification {
 const MIN_TON_FOR_STORAGE: Int = ton("0.001");
 const MAX_SCALE: Int = 256;
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
-const TELL_TIME_INTERVAL: Int = 60; // 1 minutes
+const MONITOR_INTERVAL: Int = 60; // 1 minutes
 
 contract Alarm with Initializable, FixedPoint156x100 {
     index: Int = 0;
@@ -93,7 +94,7 @@ contract Alarm with Initializable, FixedPoint156x100 {
     }
 
     receive(msg: Tock){
-        // TODO: Receive a Tock message from the Oracle, should initialize the parameters
+        // Receive a Tock message from the Oracle, should initialize the parameters
         // This function should be called only once with contract creation
 
         let sender: Address = sender();
@@ -121,9 +122,8 @@ contract Alarm with Initializable, FixedPoint156x100 {
         // TODO: When receiving Reset message, first validate the baseAsset and quoteAsset balance
         // Then send Sync message to the Oracle to update the price
         // Steps:
-        // 1. Check time is smaller than (createdAt + validLifetime)
-        // 2. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
-        // 3. Send Sync message to the Oracle
+        // 1. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
+        // 2. Send Sync message to the Oracle if time is smaller than (createdAt + validLifetime)
     }
 
     receive(msg: Mute){
@@ -204,7 +204,6 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             send(SendParameters{
                     to: contractAddress(initCode),
                     value: 0,
-                    bounce: true,
                     mode: SendPayGasSeparately,
                     body: Tock{
                         scale: scale,
@@ -222,9 +221,23 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         if (opCode == 1) {
             // Method: Wind
             // TimeKeepers send Reset message to the alarm, reply with Sync message
-            self.wind();
+            let alarmIndex: Int = sc.loadUint(256);
+            let buyNum: Int = sc.loadUint(32);
+            let quoteIndex: Int = sc.loadUint(8);
+            require(alarmIndex < self.totalAlarms, "alarmIndex out of range");
+            require(quoteIndex == 0 || quoteIndex == 1, "quoteIndex must be either 0 or 1");
+            let initCode: StateInit = self._calculateAlarmInit(alarmIndex);
+            send(SendParameters{
+                    to: contractAddress(initCode),
+                    value: 0,
+                    mode: SendPayGasSeparately,
+                    body: Reset{sender: ctx.sender, buyNum: buyNum, quoteIndex: quoteIndex}.toCell()
+                }
+            );
             return ;
         }
+        // Throw error if opCode is not supported
+        throw(0xFFFFFF);
     }
 
     receive(msg: Sync){
@@ -247,8 +260,13 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
     }
 
     receive(msg: Chime){
+        // Receive Chime message from Alarm contract
         self.requireInitialized();
-        self.sync();
+    }
+
+    receive(msg: Sync){
+        // Receive Sync message from Alarm contract to update price
+        self.requireInitialized();
     }
 
     receive(msg: Check){
@@ -293,10 +311,8 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         // TODO: Transfer the remaining funds and rewards to the Watchmaker
     }
 
-    inline fun wind() {}
-
     inline fun sync() {
-        // TODO: update lastPrice0, lastPrice1, lastTimestamp by formula
+        // TODO: update lastTimestamp, lastPrice0 by formula
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {
