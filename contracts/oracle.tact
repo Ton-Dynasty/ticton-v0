@@ -3,6 +3,9 @@ import "./library.tact";
 import "./imports/stdlib-ext.fc";
 
 @name(float)
+native float(value: Int): Int;
+
+@name(float)
 extends native float(self: Int): Int;
 
 @name(muldiv)
@@ -488,8 +491,9 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         // TODO: pow bug: Cannot reduce expression to a constant integer
         // let d: Int = (timestamp - self.latestTimestamp) / TIMEPACE;
         // let w: Int = self.div(self.encode(9), pow((1 - pow(d, 2)), 2)) / 10;
-        let w: Int = self.div(self.encode(9), 10);
-        self.latestBaseAssetPrice = ((1 - w) * self.latestBaseAssetPrice + w * baseAssetPrice);
+        // let w: Int = self.div(self.encode(9), 10);
+        let w: Int = float(1) / 10;
+        self.latestBaseAssetPrice = ((w * 9) * self.latestBaseAssetPrice + w * baseAssetPrice);
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {
