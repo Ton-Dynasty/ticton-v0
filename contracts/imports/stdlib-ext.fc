@@ -1,0 +1,9 @@
+int check_fits_196(int value) inline_ref asm "196 FITS";
+int check_fits_128(int value) inline_ref asm "128 FITS";
+
+;; float function convert int128 input to float196 representation
+;; The integer part stores 128 bits integer, and the fractional part should be 68 bits.
+int float(int x) {
+    x.check_fits_128();
+    return x << 68;
+}

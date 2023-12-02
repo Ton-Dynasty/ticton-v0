@@ -1,5 +1,13 @@
 import "@stdlib/deploy";
 import "./library.tact";
+import "./imports/stdlib-ext.fc";
+
+@name(float)
+extends native float(self: Int): Int;
+
+@name(muldiv)
+extends native muldiv(self: Int, numerator: Int, denominator: Int): Int;
+
 message Initialize {
     baseAssetWallet: Address; // e.g. jetton wallet address for TON, which is 0
     quoteAssetWallet: Address; // e.g. jetton wallet address for USDT
@@ -293,7 +301,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = self.div(self.encode(msg.amount), baseAssetPrice);
+            let needBaseAssetAmount: Int = msg.amount * baseAssetPrice;
             require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
