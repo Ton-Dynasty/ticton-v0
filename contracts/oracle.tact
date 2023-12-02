@@ -18,19 +18,17 @@ message Tock {
 message Wind {
     alarmIndex: Int as uint256; // the interacted alarm index
     buyNum: Int as uint32; // how many scale to buy
-    quoteIndex: Int as uint8; // 0 for baseAsset, 1 for quoteAsset
+    side: Int as uint8; // 0 for baseAsset, 1 for quoteAsset
 }
 message Reset {
     sender: Address;
     buyNum: Int; // The number of scales to buy
-    quoteIndex: Int; // 0 for baseAsset, 1 for quoteAsset
+    side: Int; // 0 for baseAsset, 1 for quoteAsset
+    quoteAssetAmount: Int; // The amount of quoteAsset oracle received
 }
 message Sync {
-    baseAssetAmount: Int;
-    baseAssetScale: Int;
-    quoteAssetAmount: Int;
-    quoteAssetScale: Int;
-    timestamp: Int;
+    baseAssetPrice: Int as uint256; // quoteAsset amount to buy 1 baseAsset
+    createdAt: Int;
 }
 message Ring {
     queryID: Int;
@@ -50,11 +48,23 @@ message Announce {
     price: Int;
 }
 message Chronoshift {
-    timestamp: Int;
+    queryID: Int;
+    createdAt: Int;
+    watchmaker: Address;
+    baseAssetPrice: Int as uint256;
+    remainScale: Int;
+    remainBaseAssetScale: Int;
+    remainQuoteAssetScale: Int;
 }
 message Chime {
+    alarmIndex: Int;
     timeKeeper: Address;
-    timestamp: Int;
+    createdAt: Int;
+    baseAssetPrice: Int as uint256;
+    remainScale: Int;
+    newScale: Int;
+    refundBaseAssetAmount: Int;
+    refundQuoteAssetAmount: Int;
 }
 message(0x7362d09c) JettonTransferNotification {
     query_id: Int as uint64; // arbitrary request number
@@ -62,10 +72,20 @@ message(0x7362d09c) JettonTransferNotification {
     sender: Address; // address of the sender of the jettons
     forward_payload: Slice as remaining; // optional custom payload
 }
-const MIN_TON_FOR_STORAGE: Int = ton("0.001");
-const MAX_SCALE: Int = 256;
+message(0x0f8a7ea5) JettonTransfer {
+    query_id: Int as uint64; // arbitrary request number
+    amount: Int as coins; // amount of jettons to transfer
+    destination: Address; // address of the new owner of the jettons
+    response_destination: Address; // address where to send a response with confirmation of a successful transfer and the rest of the incoming message Toncoins.
+    custom_payload: Cell?; // optional custom payload
+    forward_ton_amount: Int as coins; // the amount of nanotons to be sent to the destination address.
+    forward_payload: Slice as remaining; // optional custom data that should be sent to the destination address.
+}
+const DEPLOY_FEE: Int = ton("0.1");
+const STORAGE_FEE: Int = ton("0.007");
+const CHECK_FEE: Int = ton("0.001");
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
-const MONITOR_INTERVAL: Int = 60; // 1 minutes
+const TIMEPACE: Int = 60; // 1 minutes
 
 contract Alarm with Initializable, FixedPoint156x100 {
     index: Int = 0;
@@ -75,9 +95,10 @@ contract Alarm with Initializable, FixedPoint156x100 {
     baseAssetScale: Int = 0;
     quoteAssetScale: Int = 0;
     remainScale: Int = 0;
-    init(index: Int){
+    baseAssetPrice: Int = 0;
+    init(index: Int, oracle: Address){
         self.index = index;
-        self.oracleAddress = newAddress(0, 0);
+        self.oracleAddress = oracle;
         self.watchmaker = newAddress(0, 0);
     }
 
@@ -108,6 +129,7 @@ contract Alarm with Initializable, FixedPoint156x100 {
         self.baseAssetScale = msg.scale;
         self.quoteAssetScale = msg.scale;
         self.remainScale = msg.scale;
+        self.baseAssetPrice = msg.baseAssetPrice;
         // Return the remaining funds back to the Watchmaker
         send(SendParameters{
                 to: self.watchmaker,
@@ -119,11 +141,62 @@ contract Alarm with Initializable, FixedPoint156x100 {
     }
 
     receive(msg: Reset){
-        // TODO: When receiving Reset message, first validate the baseAsset and quoteAsset balance
+        // When receiving Reset message, first validate the baseAsset and quoteAsset balance
         // Then send Sync message to the Oracle to update the price
         // Steps:
+        // 0. Check if the message is from Oracle
         // 1. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
         // 2. Send Sync message to the Oracle if time is smaller than (createdAt + validLifetime)
+        // 3. Send Chime message to the Oracle to create a new alarm
+        let ctx: Context = context();
+        self.requireOracle(ctx.sender);
+        require(self.remainScale > msg.buyNum, "Not enough scale to buy");
+        let failed: Bool = false;
+        let refundBaseAssetAmount: Int = 0; // 0 means return as much as possible
+        let refundQuoteAssetAmount: Int = 0;
+        let baseAssetPrice: Int = 0;
+        if (msg.side == 0) {
+            if (self.baseAssetScale < msg.buyNum) {
+                failed = true;
+            } else {
+                // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
+                self.baseAssetScale = (self.baseAssetScale - msg.buyNum); // TODO: Check overflow
+                self.quoteAssetScale = (self.quoteAssetScale + msg.buyNum);
+                self.remainScale = (self.remainScale - msg.buyNum); // TODO: Check overflow
+            }
+        } else {
+            if (self.quoteAssetScale < msg.buyNum) {
+                failed = true;
+            } else {
+                // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
+                self.baseAssetScale = (self.baseAssetScale + msg.buyNum); // TODO: Check overflow
+                self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
+                self.remainScale = (self.remainScale - msg.buyNum); // TODO: Check overflow
+            }
+        }
+        if (failed) {
+            // Return all funds back to the TimeKeeper
+            refundQuoteAssetAmount = msg.quoteAssetAmount;
+        } else if (self.remainScale > 0) {
+            // send Chime message to the Oracle to update the price
+            baseAssetPrice = self.baseAssetPrice;
+        }
+        send(SendParameters{
+                to: msg.sender,
+                value: (ctx.value - STORAGE_FEE),
+                mode: SendIgnoreErrors,
+                body: Chime{
+                    alarmIndex: self.index,
+                    timeKeeper: msg.sender,
+                    baseAssetPrice: baseAssetPrice,
+                    createdAt: self.createdAt,
+                    remainScale: self.remainScale,
+                    newScale: msg.buyNum << 1,
+                    refundQuoteAssetAmount: refundQuoteAssetAmount,
+                    refundBaseAssetAmount: refundBaseAssetAmount
+                }.toCell()
+            }
+        );
     }
 
     receive(msg: Mute){
@@ -131,6 +204,21 @@ contract Alarm with Initializable, FixedPoint156x100 {
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
+        send(SendParameters{
+                to: self.oracleAddress,
+                value: 0,
+                mode: (SendRemainingBalance + SendDestroyIfZero),
+                body: Chronoshift{
+                    queryID: msg.queryID,
+                    createdAt: self.createdAt,
+                    watchmaker: self.watchmaker,
+                    baseAssetPrice: self.baseAssetPrice,
+                    remainScale: self.remainScale,
+                    remainBaseAssetScale: self.baseAssetScale,
+                    remainQuoteAssetScale: self.quoteAssetScale
+                }.toCell()
+            }
+        );
     }
 }
 
@@ -145,8 +233,8 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
     is_initialized: Bool;
     // calculated
     totalAlarms: Int = 0;
-    lastPrice0: Int = 0; // latest price of baseAsset
-    lastTimestamp: Int = 0;
+    latestBaseAssetPrice: Int = 0; // latest price of baseAsset
+    latestTimestamp: Int = 0;
     init(baseAsset: Address, quoteAsset: Address){
         self.manager = sender();
         self.is_initialized = false;
@@ -154,6 +242,10 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         self.quoteAsset = quoteAsset;
         self.baseAssetWallet = newAddress(0, 0);
         self.quoteAssetWallet = newAddress(0, 0);
+    }
+
+    inline fun requireAlarm(index: Int) {
+        require(sender() == contractAddress(self._calculateAlarmInit(index)), "Only alarm can call this function");
     }
 
     override inline fun requireInitialized() {
@@ -189,13 +281,20 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
             let scale: Int = sc.loadUint(32);
             if (validBefore > currentTimestamp || scale != 1) {
-                // TODO: Return jetton back if gas is enough
+                // Return jetton back if gas is enough
+                send(SendParameters{
+                        to: ctx.sender,
+                        value: ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE),
+                        mode: 0,
+                        body: "Invalid Tick message".asComment()
+                    }
+                );
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = self.encode(msg.amount) * baseAssetPrice;
+            let needBaseAssetAmount: Int = self.div(self.encode(msg.amount), baseAssetPrice);
             require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
-            require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + MIN_TON_FOR_STORAGE)),
+            require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
             );
             nativeReserve(needBaseAssetAmount, 0);
@@ -223,26 +322,18 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             // TimeKeepers send Reset message to the alarm, reply with Sync message
             let alarmIndex: Int = sc.loadUint(256);
             let buyNum: Int = sc.loadUint(32);
-            let quoteIndex: Int = sc.loadUint(8);
+            let side: Int = sc.loadUint(1);
             require(alarmIndex < self.totalAlarms, "alarmIndex out of range");
-            require(quoteIndex == 0 || quoteIndex == 1, "quoteIndex must be either 0 or 1");
-            let initCode: StateInit = self._calculateAlarmInit(alarmIndex);
+            require(side == 0 || side == 1, "side must be either 0 or 1");
             send(SendParameters{
-                    to: contractAddress(initCode),
-                    value: 0,
-                    mode: SendPayGasSeparately,
-                    body: Reset{sender: ctx.sender, buyNum: buyNum, quoteIndex: quoteIndex}.toCell()
+                    to: contractAddress(self._calculateAlarmInit(alarmIndex)),
+                    value: (ctx.value - STORAGE_FEE),
+                    mode: 0,
+                    body: Reset{sender: ctx.sender, buyNum: buyNum, side: side, quoteAssetAmount: msg.amount}.toCell()
                 }
             );
             return ;
         }
-        // Throw error if opCode is not supported
-        throw(0xFFFFFF);
-    }
-
-    receive(msg: Sync){
-        self.requireInitialized();
-        self.sync();
     }
 
     receive(msg: Ring){
@@ -262,61 +353,138 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
     receive(msg: Chime){
         // Receive Chime message from Alarm contract
         self.requireInitialized();
-    }
-
-    receive(msg: Sync){
-        // Receive Sync message from Alarm contract to update price
-        self.requireInitialized();
+        self.requireAlarm(msg.alarmIndex);
+        if (msg.remainScale > 0) {
+            self.sync(msg.createdAt, msg.baseAssetPrice);
+        }
+        // Deploy a new alarm contract
+        let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
+        send(SendParameters{
+                to: contractAddress(initCode),
+                value: 0,
+                mode: 0,
+                body: Tock{
+                    createdAt: now(),
+                    scale: msg.newScale,
+                    watchmaker: msg.timeKeeper,
+                    baseAssetPrice: msg.baseAssetPrice
+                }.toCell(),
+                code: initCode.code,
+                data: initCode.data
+            }
+        );
+        // Transfer the remaining funds or profits to the TimeKeeper
+        let ctx: Context = context();
+        if (msg.refundQuoteAssetAmount > 0) {
+            // Send Jetton Transfer message to refund
+            send(SendParameters{
+                    to: self.quoteAssetWallet,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    body: JettonTransfer{
+                        query_id: 0,
+                        amount: msg.refundQuoteAssetAmount,
+                        destination: msg.timeKeeper,
+                        response_destination: myAddress(),
+                        custom_payload: null,
+                        forward_ton_amount: msg.refundBaseAssetAmount,
+                        forward_payload: emptySlice()
+                    }.toCell()
+                }
+            );
+            return ;
+        }
+        if (msg.refundBaseAssetAmount > 0) {
+            send(SendParameters{
+                    to: msg.timeKeeper,
+                    value: msg.refundBaseAssetAmount,
+                    mode: 0,
+                    body: "SlickBack".asComment()
+                }
+            );
+            return ;
+        }
     }
 
     receive(msg: Check){
+        // Protocols send Check message to query the price
         self.requireInitialized();
-        // TODO: Protocols send Check message to query the price
         require(msg.quoteIndex == 0 && msg.quoteIndex == 1, "quoteIndex must be either 0 or 1");
+        let ctx: Context = context();
+        let remain: Int = (((ctx.value - STORAGE_FEE) - ctx.readForwardFee()) - CHECK_FEE);
         if (msg.quoteIndex == 0) {
             send(SendParameters{
                     to: sender(),
-                    value: 0,
-                    mode: SendRemainingValue,
+                    value: remain,
+                    mode: SendPayGasSeparately,
                     body: Announce{
                         queryID: msg.queryID,
                         quoteAsset: self.baseAsset,
-                        timestamp: self.lastTimestamp,
-                        price: self.lastPrice0
+                        timestamp: self.latestTimestamp,
+                        price: self.latestBaseAssetPrice
                     }.toCell()
                 }
             );
             return ;
         }
         if (msg.quoteIndex == 1) {
-            // send(SendParameters{
-            //         to: sender(),
-            //         value: 0,
-            //         mode: SendRemainingValue,
-            //         body: Announce{
-            //             queryID: msg.queryID,
-            //             quoteAsset: self.quoteAsset,
-            //             timestamp: self.lastTimestamp,
-            //             price: self.lastPrice1
-            //         }.toCell()
-            //     }
-            // );
+            let latestQuoteAssetPrice: Int = self.div(self.encode(1), self.latestBaseAssetPrice);
+            send(SendParameters{
+                    to: sender(),
+                    value: remain,
+                    mode: SendPayGasSeparately,
+                    body: Announce{
+                        queryID: msg.queryID,
+                        quoteAsset: self.quoteAsset,
+                        timestamp: self.latestTimestamp,
+                        price: latestQuoteAssetPrice
+                    }.toCell()
+                }
+            );
             return ;
         }
     }
 
     receive(msg: Chronoshift){
-        self.sync();
-
+        self.requireInitialized();
+        if (msg.remainScale > 0) {
+            self.sync(msg.createdAt, msg.baseAssetPrice);
+        }
         // TODO: Transfer the remaining funds and rewards to the Watchmaker
+        if (msg.remainQuoteAssetScale > 0) {
+            send(SendParameters{
+                    to: msg.watchmaker,
+                    value: msg.remainQuoteAssetScale,
+                    mode: SendPayGasSeparately,
+                    body: JettonTransfer{
+                        query_id: 0,
+                        amount: msg.remainQuoteAssetScale * msg.baseAssetPrice,
+                        destination: msg.watchmaker,
+                        response_destination: newAddress(0, 0),
+                        custom_payload: null,
+                        forward_ton_amount: msg.remainBaseAssetScale,
+                        forward_payload: emptySlice()
+                    }.toCell()
+                }
+            );
+            return ;
+        }
+        if (msg.remainBaseAssetScale > 0) {}
     }
 
-    inline fun sync() {
-        // TODO: update lastTimestamp, lastPrice0 by formula
+    inline fun sync(timestamp: Int, baseAssetPrice: Int) {
+        // Calculate the weighted average of the baseAssetPrice
+        // d = (new timestamp - old timestamp) / TIMEPACE
+        // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
+        // TODO: pow bug: Cannot reduce expression to a constant integer
+        // let d: Int = (timestamp - self.latestTimestamp) / TIMEPACE;
+        // let w: Int = self.div(self.encode(9), pow((1 - pow(d, 2)), 2)) / 10;
+        let w: Int = self.div(self.encode(9), 10);
+        self.latestBaseAssetPrice = ((1 - w) * self.latestBaseAssetPrice + w * baseAssetPrice);
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {
-        return initOf Alarm(index);
+        return initOf Alarm(index, myAddress());
     }
 
     get fun getAlarmAddress(index: Int): Address {
