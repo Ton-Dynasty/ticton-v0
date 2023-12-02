@@ -268,7 +268,8 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
     receive(msg: JettonTransferNotification){
         let ctx: Context = context();
         if (self.is_initialized == false) {
-            // TODO: Return jetton back if gas is enough
+            // Return jetton back if gas is enough
+            send(SendParameters{to: ctx.sender, value: ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE), mode: 0});
             return ;
         }
         require(ctx.sender == self.quoteAssetWallet, "Only oracle quoteAsset wallet can send notification to oracle");
@@ -338,7 +339,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
 
     receive(msg: Ring){
         self.requireInitialized();
-        // TODO: Watchmaker sends Ring message to Mute a specific alarm
+        // Watchmaker sends Ring message to Mute a specific alarm
         require(msg.alarmIndex < self.totalAlarms, "alarmIndex out of range");
         let alarmAddress: Address = self.getAlarmAddress(msg.alarmIndex);
         send(SendParameters{
@@ -450,7 +451,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         if (msg.remainScale > 0) {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
-        // TODO: Transfer the remaining funds and rewards to the Watchmaker
+        // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
             send(SendParameters{
                     to: msg.watchmaker,
