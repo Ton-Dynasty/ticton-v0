@@ -1,9 +1,25 @@
 int check_fits_196(int value) inline_ref asm "196 FITS";
 int check_fits_128(int value) inline_ref asm "128 FITS";
+int check_fits_u196(int value) inline_ref asm "196 UFITS";
 
 ;; float function convert int128 input to float196 representation
-;; The integer part stores 128 bits integer, and the fractional part should be 68 bits.
-int float(int x) {
+;; The integer part stores 128 bits integer, and the fractional part should be 68 bits (about 20 digits).
+int float(int x) inline_ref {
     x.check_fits_128();
     return x << 68;
+}
+
+;; Newton's method to calculate squate root
+int sqrt(int y) inline_ref {
+    throw_unless(5, y > 0);
+    if (y > 3){
+        int z = y;
+        int x = y / 2 + 1;
+        while(x < z) {
+            z = x;
+            x = (y / x + x) / 2;
+        }
+    } else {
+        return 1;
+    }
 }
