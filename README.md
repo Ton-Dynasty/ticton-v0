@@ -1,4 +1,4 @@
-# TicTon
+# TicTon v0
 
 ## Project structure
 
