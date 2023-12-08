@@ -16,7 +16,7 @@ message Initialize {
     quoteAssetWallet: Address; // e.g. jetton wallet address for USDT
 }
 message Tick {
-    validBefore: Int as uint256; // If now() is larger than validBefore, then return the funds back to the Watchmaker if value is enough to pay the gas
+    expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
     baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset
     scale: Int as uint32; // Scale is a multiplier of the MIN_BASEASSET_TRESHOLD, valid range is [1, 100]
 }
@@ -118,7 +118,8 @@ contract Alarm with Initializable, FixedPoint156x100 {
     }
 
     override inline fun requireNotInitialized() {
-        require(self.oracleAddress == newAddress(0, 0), "Already initialized");
+        // !!! Change from oracle address to watchmaker address
+        require(self.watchmaker == newAddress(0, 0), "Already initialized");
     }
 
     inline fun requireOracle(sender: Address) {
@@ -128,10 +129,9 @@ contract Alarm with Initializable, FixedPoint156x100 {
     receive(msg: Tock){
         // Receive a Tock message from the Oracle, should initialize the parameters
         // This function should be called only once with contract creation
-
         let sender: Address = sender();
         // Check the request is valid
-        self.requireNotInitialized();
+        self.requireNotInitialized(); 
         self.requireOracle(sender);
         // Initialize the parameters
         self.createdAt = now();
@@ -231,6 +231,27 @@ contract Alarm with Initializable, FixedPoint156x100 {
             }
         );
     }
+
+    // Get Methods
+    get fun getWatchmaker(): Address {
+        return self.watchmaker;
+    }
+
+    get fun getBaseAssetScale(): Int {
+        return self.baseAssetScale;
+    }
+
+    get fun getQuoteAssetScale(): Int {
+        return self.quoteAssetScale;
+    }
+
+    get fun getRemainScale(): Int {
+        return self.remainScale;
+    }
+
+    get fun getBaseAssetPrice(): Int {
+        return self.baseAssetPrice;
+    }
 }
 
 contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
@@ -269,8 +290,9 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
 
     receive(msg: Initialize){
         require(self.is_initialized == false, "Already initialized");
-        require(sender() == self.manager, "Only manager can initialize");
+        require(sender() == self.manager, "Only manager can initialize"); //Can not pass, cause manager is not set yet
         require(msg.baseAssetWallet == newAddress(0, 0), "Only support TON as baseAsset");
+        self.manager = sender();
         self.is_initialized = true;
         self.baseAssetWallet = msg.baseAssetWallet;
         self.quoteAssetWallet = msg.quoteAssetWallet;
@@ -284,15 +306,17 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             return ;
         }
         require(ctx.sender == self.quoteAssetWallet, "Only oracle quoteAsset wallet can send notification to oracle");
-        let sc: Slice = msg.forward_payload;
+        let payload: Slice = msg.forward_payload;
+        let ref: Cell = payload.loadRef();
+        let sc: Slice = ref.beginParse();
         let opCode: Int = sc.loadUint(8); // 0 means Tick, 1 means Wind
         if (opCode == 0) {
             // Method: Tick
             let currentTimestamp: Int = now();
-            let validBefore: Int = sc.loadUint(256);
+            let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
             let scale: Int = sc.loadUint(32);
-            if (validBefore > currentTimestamp || scale != 1) {
+            if (expireAt > currentTimestamp || scale != 1) {
                 // Return jetton back if gas is enough
                 send(SendParameters{
                         to: ctx.sender,
@@ -304,7 +328,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = msg.amount * baseAssetPrice;
+            let needBaseAssetAmount: Int = 1000000000 * msg.amount.float() / baseAssetPrice; // !!! x 1000000000 to become ton unit
             require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
@@ -314,7 +338,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
             send(SendParameters{
                     to: contractAddress(initCode),
-                    value: 0,
+                    value: ton("0.05"),
                     mode: SendPayGasSeparately,
                     body: Tock{
                         scale: scale,
