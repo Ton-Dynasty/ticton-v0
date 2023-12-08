@@ -1,7 +1,7 @@
 import { Alarm } from './../build/Oracle/tact_Alarm';
 import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
 import { Address, Cell, address, beginCell, toNano } from 'ton-core';
-import { JettonTransfer, OracleV0 } from '../wrappers/Oracle_OracleV0';
+import { JettonTransfer, OracleV0, Tock } from '../wrappers/Oracle_OracleV0';
 import { ExampleJettonMaster } from '../wrappers/Jetton_ExampleJettonMaster';
 import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet';
 import '@ton-community/test-utils';
@@ -45,7 +45,7 @@ describe('Oracle', () => {
         );
     }
     
-    async function prepareAndSendJettonTransfer(watchmaker: SandboxContract<TreasuryContract>, oracle: SandboxContract<OracleV0>, baseAssetPriceAmount: number, baseAssetAmount: number, expireAt: number, transferValue: number) {
+    async function prepareAndSendJettonTransfer(watchmaker: SandboxContract<TreasuryContract>, oracle: SandboxContract<OracleV0>, baseAssetPriceAmount: number, baseAssetAmount: number, expireAt: number, scale:number, transferValue: number) {
         const baseAssetPrice = toTic(baseAssetPriceAmount);
         const forwardTonAmount = toNano(toTic(baseAssetAmount) / baseAssetPrice) + toNano(0.5);
     
@@ -53,7 +53,7 @@ describe('Oracle', () => {
             .storeUint(0, 8)
             .storeUint(expireAt, 256)
             .storeUint(baseAssetPrice, 256)
-            .storeUint(1, 32)
+            .storeUint(scale, 32)
             .endCell();
     
         const jettonTransfer: JettonTransfer = {
@@ -163,10 +163,11 @@ describe('Oracle', () => {
 
 
         // watchmaker transfer 1 ton and 10 usdt to oracle
-        let baseAssetPriceAmount = 3;
+        let baseAssetPriceAmount = 2.5;
         let baseAssetPrice = toTic(baseAssetPriceAmount);//Number(2.5 * 1000000) << 68;
         let baseAssetAmount = 10n * 1000000n;
-        let forward_ton_amount = toNano(toTic(10)/baseAssetPrice) + toNano(0.5);
+        let forward_ton_amount = toNano(toTic(10)/baseAssetPrice) + toNano(1);
+        console.log('forward_ton_amount', forward_ton_amount);
         let expireAt = 1000;
         let forwardInfo: Cell = beginCell().storeUint(0,8).storeUint(expireAt,256).storeUint(baseAssetPrice,256).storeUint(1,32).endCell();
         const jettonTransfer: JettonTransfer = {
@@ -208,13 +209,17 @@ describe('Oracle', () => {
             success: true,
         });
         
-        // Check that oracle build alarm successfully
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
+        // Check that oracle build alarm successfully
         expect(transfterResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: AlarmAddress,
             success: true,
         });
+
+        // Check that alarm count is 1
+        let alarmIndex = await oracle.getTotalAmount();
+        expect(alarmIndex).toEqual(1n);
 
         // Check that alarm send build alarm msg to watchmaker
         expect(transfterResult.transactions).toHaveTransaction({
@@ -258,6 +263,62 @@ describe('Oracle', () => {
         const baseAssetAmount = 10; // 10usdt
         const expireAt = 1000;
         const transferValue = 10;
-        const transfterResult = await prepareAndSendJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt, transferValue);
+        const scale = 1;
+        const transfterResult = await prepareAndSendJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt, scale, transferValue);
+    });
+
+    it('Should fail if message is not from oracle', async () => {
+        // Initialize oracle
+        const initResult = await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        const mintyResult = await mintTokensToWatchmaker(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+        const baseAssetAmount = 10; // 10usdt
+        const expireAt = 1000;
+        const transferValue = 10;
+        const scale = 1;
+        const transfterResult = await prepareAndSendJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt, scale, transferValue);
+
+
+        let AlarmAddress = await oracle.getGetAlarmAddress(0n);
+        const tockMsg: Tock = {
+            $$type: 'Tock',
+            scale: 1n,
+            createdAt: 0n,
+            watchmaker: watchmaker.address,
+            baseAssetPrice: toTic(3),
+        };
+
+        const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
+        const tockResult = await alarm0.send(
+            watchmaker.getSender(),
+            {
+                value: toNano('10'),
+            },
+            tockMsg
+        );
+        // should fail because msg is not from oracle
+        expect(tockResult.transactions).toHaveTransaction({
+            from: watchmaker.address,
+            to: AlarmAddress,
+            success: false,
+        });
+    });
+
+    it('Should return funds if remaining ton is sufficient to pay the gas', async () => {
+        // TODO: the code in orale for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
+        // Initialize oracle
+        const initResult = await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        const mintyResult = await mintTokensToWatchmaker(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+        const baseAssetAmount = 10; // 10usdt
+        const expireAt = 1000;
+        const transferValue = 10;
+        const scale = 0;
+        const transfterResult = await prepareAndSendJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt,scale, transferValue);
+        //printTransactionFees(transfterResult.transactions);
     });
 });

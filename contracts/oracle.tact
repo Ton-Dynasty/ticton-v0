@@ -118,7 +118,7 @@ contract Alarm with Initializable, FixedPoint156x100 {
     }
 
     override inline fun requireNotInitialized() {
-        // !!! Change from oracle address to watchmaker address
+        // MODIFIED: Change from oracle address to watchmaker address
         require(self.watchmaker == newAddress(0, 0), "Already initialized");
     }
 
@@ -318,6 +318,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             let scale: Int = sc.loadUint(32);
             if (expireAt > currentTimestamp || scale != 1) {
                 // Return jetton back if gas is enough
+                // TODO: we can't send this msg to wallet and return jetton back, we have to send jetton transfer msg to send jetton back
                 send(SendParameters{
                         to: ctx.sender,
                         value: ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE),
@@ -328,18 +329,21 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = 1000000000 * msg.amount.float() / baseAssetPrice; // !!! x 1000000000 to become ton unit
+            let needBaseAssetAmount: Int = 1000000000 * msg.amount.float() / baseAssetPrice; // MODIFIED: x 1000000000 to become ton unit
             require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
             );
+            // TODO: If the requirement above is not satisfied, return the funds and jetton back to the Watchmaker
             nativeReserve(needBaseAssetAmount, 0);
+            // MODIFIED: origin is value:0 mode: SendPayGasSeparately
+            let sendBackAmount: Int = (ctx.value - needBaseAssetAmount - 2 * (ctx.readForwardFee() + STORAGE_FEE));
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
             send(SendParameters{
                     to: contractAddress(initCode),
-                    value: ton("0.05"),
-                    mode: SendPayGasSeparately,
+                    value: sendBackAmount,
+                    mode: SendIgnoreErrors,
                     body: Tock{
                         scale: scale,
                         createdAt: currentTimestamp,
