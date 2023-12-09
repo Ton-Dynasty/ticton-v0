@@ -137,10 +137,10 @@ contract Alarm with Initializable, FixedPoint156x100 {
         self.createdAt = now();
         self.oracleAddress = sender;
         self.watchmaker = msg.watchmaker;
-        self.baseAssetScale = msg.scale;
-        self.quoteAssetScale = msg.scale;
-        self.remainScale = msg.scale;
-        self.baseAssetPrice = msg.baseAssetPrice;
+        self.baseAssetScale = msg.scale; // 1
+        self.quoteAssetScale = msg.scale; // 1
+        self.remainScale = msg.scale; // 1
+        self.baseAssetPrice = msg.baseAssetPrice; // 3
         // Return the remaining funds back to the Watchmaker
         send(SendParameters{
                 to: self.watchmaker,
@@ -161,7 +161,7 @@ contract Alarm with Initializable, FixedPoint156x100 {
         // 3. Send Chime message to the Oracle to create a new alarm
         let ctx: Context = context();
         self.requireOracle(ctx.sender);
-        require(self.remainScale > msg.buyNum, "Not enough scale to buy");
+        require(self.remainScale >= msg.buyNum, "Not enough scale to buy"); // MODIFIED: >=
         let failed: Bool = false;
         let refundBaseAssetAmount: Int = 0; // 0 means return as much as possible
         let refundQuoteAssetAmount: Int = 0;
@@ -193,12 +193,12 @@ contract Alarm with Initializable, FixedPoint156x100 {
             baseAssetPrice = self.baseAssetPrice;
         }
         send(SendParameters{
-                to: msg.sender,
-                value: (ctx.value - STORAGE_FEE),
+                to: ctx.sender,
+                value: ctx.value - ton("0.02"), // MODEFIED: - ton("0.02")
                 mode: SendIgnoreErrors,
                 body: Chime{
                     alarmIndex: self.index,
-                    timeKeeper: msg.sender,
+                    timeKeeper: msg.sender, // here is a problem
                     baseAssetPrice: baseAssetPrice,
                     createdAt: self.createdAt,
                     remainScale: self.remainScale,
@@ -369,7 +369,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                     to: contractAddress(self._calculateAlarmInit(alarmIndex)),
                     value: (ctx.value - STORAGE_FEE),
                     mode: 0,
-                    body: Reset{sender: ctx.sender, buyNum: buyNum, side: side, quoteAssetAmount: msg.amount}.toCell()
+                    body: Reset{sender: msg.sender, buyNum: buyNum, side: side, quoteAssetAmount: msg.amount}.toCell()
                 }
             );
             return ;
@@ -401,7 +401,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: 0,
+                value: ton("0.05"), // MODIFIED: it has to be at least 0.05 ton to initialize a new alarm
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
@@ -416,6 +416,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
         if (msg.refundQuoteAssetAmount > 0) {
+            dump("1");
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
@@ -435,6 +436,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             return ;
         }
         if (msg.refundBaseAssetAmount > 0) {
+            dump("2");
             send(SendParameters{
                     to: msg.timeKeeper,
                     value: msg.refundBaseAssetAmount,
@@ -444,6 +446,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             );
             return ;
         }
+        dump("3");
     }
 
     receive(msg: Check){
