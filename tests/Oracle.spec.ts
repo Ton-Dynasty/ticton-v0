@@ -2,6 +2,7 @@ import { Alarm } from './../build/Oracle/tact_Alarm';
 import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
 import { Address, Cell, address, beginCell, toNano } from 'ton-core';
 import { Chime, JettonTransfer, OracleV0, Reset, Tock } from '../wrappers/Oracle_OracleV0';
+import { Ring, Mute, Chronoshift } from '../wrappers/Oracle_OracleV0';
 import { ExampleJettonMaster } from '../wrappers/Jetton_ExampleJettonMaster';
 import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet';
 import '@ton-community/test-utils';
@@ -650,4 +651,164 @@ describe('Oracle', () => {
         latestPrice = await oracle.getGetLatestBaseAssetPrice();
         // Not Finished, cause for now the alarm contract that timekeeper2 build doesn't have baseprice
     });
+
+    // it('Ring Test: Should fail if alarm index does not exists', async () => {
+    //     // Initialize oracle
+    //     const initResult = await initializeOracle(oracle, owner);
+    //     // Mint tokens to watchmaker
+    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
+    //     // watchmaker post price to oracle
+    //     const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+    //     const baseAssetAmount = 10; // 10usdt
+    //     const expireAt = 1000;
+    //     const transferValue = 10;
+    //     const scale = 1;
+    //     const transfterResult = await tickInJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt,scale, transferValue);
+    //     // Check that alarm count is 1
+    //     let alarmIndexAfter = await oracle.getTotalAmount();
+    //     expect(alarmIndexAfter).toEqual(1n);
+    //     // Watchmaker should send ring msg to oracle 
+    //     let alarmIndex = 10n;
+    //     let ring: Ring = {
+    //         $$type: 'Ring',
+    //         queryID: 0n,
+    //         alarmIndex: alarmIndex,
+    //     };
+    //     let ringResult = await oracle.send(
+    //         watchmaker.getSender(),
+    //         {
+    //             value: toNano('10'),
+    //         },
+    //         ring
+    //     );
+    //     // Should fail because alarmIndex does not exists
+    //     expect(ringResult.transactions).toHaveTransaction({
+    //         from: watchmaker.address,
+    //         to: oracle.address,
+    //         success: false,
+    //     });
+    // });
+
+    // it('Ring Test: Should send Mute message to corresponding Alarm contract', async () => {
+    //     // Initialize oracle
+    //     const initResult = await initializeOracle(oracle, owner);
+    //     // Mint tokens to watchmaker
+    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
+    //     // watchmaker post price to oracle
+    //     const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+    //     const baseAssetAmount = 10; // 10usdt
+    //     const expireAt = 1000;
+    //     const transferValue = 10;
+    //     const scale = 1;
+    //     const transfterResult = await tickInJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt,scale, transferValue);
+    //     // Check that alarm count is 1
+    //     let alarmIndexAfter = await oracle.getTotalAmount();
+    //     expect(alarmIndexAfter).toEqual(1n);
+    //     // Watchmaker should send ring msg to oracle 
+    //     let alarmIndex = 1n;
+    //     let ring: Ring = {
+    //         $$type: 'Ring',
+    //         queryID: 0n,
+    //         alarmIndex: alarmIndex,
+    //     };
+    //     let ringResult = await oracle.send(
+    //         watchmaker.getSender(),
+    //         {
+    //             value: toNano('10'),
+    //         },
+    //         ring
+    //     );
+
+    //     // Should success
+    //     expect(ringResult.transactions).toHaveTransaction({
+    //         from: watchmaker.address,
+    //         to: oracle.address,
+    //         success: true,
+    //     });
+
+    //     // Check that oracle send Mute msg to corresponding Alarm contract
+    //     let alarmAddress = await oracle.getGetAlarmAddress(alarmIndex);
+    //     let alarmContract = blockchain.openContract(await Alarm.fromAddress(alarmAddress));
+    //     expect(ringResult.transactions).toHaveTransaction({
+    //         from: oracle.address,
+    //         to: alarmAddress,
+    //         success: true,
+    //     });
+    // });
+
+    // it('Ring Test: Should failed if Mute message is not from oracle', async () => {
+    //     // Initialize oracle
+    //     const initResult = await initializeOracle(oracle, owner);
+    //     // Mint tokens to watchmaker
+    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
+
+    //     // watchmaker post price to oracle
+    //     const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+    //     const baseAssetAmount = 10; // 10usdt
+
+    //     const expireAt = 1000;
+    //     const transferValue = 10;
+    //     const scale = 1;
+
+    //     const transfterResult = await tickInJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt,scale, transferValue);
+
+    //     // Check that alarm count is 1
+    //     let alarmIndexAfter = await oracle.getTotalAmount();
+    //     expect(alarmIndexAfter).toEqual(1n);
+
+    //     // Watchmaker should send ring msg to oracle 
+    //     let alarmIndex = 1n;
+
+    //     let alarmAddress = await oracle.getGetAlarmAddress(alarmIndex);
+    //     let alarmContract = blockchain.openContract(await Alarm.fromAddress(alarmAddress));
+
+    //     // Timekeeper try to send Mute msg to corresponding Alarm contract
+    //     let timekeeper: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper');
+    //     let mute: Mute = {
+    //         $$type: 'Mute',
+    //         queryID: 0n,
+    //     };
+    //     let muteResult = await alarmContract.send(
+    //         timekeeper.getSender(),
+    //         {
+    //             value: toNano('10'),
+    //         },
+    //         mute
+    //     );
+
+    //     // Should fail because msg is not from oracle
+    //     expect(muteResult.transactions).toHaveTransaction({
+    //         from: timekeeper.address,
+    //         to: alarmAddress,
+    //         success: false,
+    //     });
+    // });
+
+    // it('Ring Test: Should alarm contract send Chronoshift to oracle with remaining balance', async () => {
+    //     // Initialize oracle
+    //     const initResult = await initializeOracle(oracle, owner);
+
+    //     // Mint tokens to watchmaker
+    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
+
+    //     // watchmaker post price to oracle
+    //     const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+    //     const baseAssetAmount = 10; // 10usdt
+
+    //     const expireAt = 1000;
+    //     const transferValue = 10;
+    //     const scale = 1;
+
+    //     const transfterResult = await tickInJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, baseAssetAmount, expireAt,scale, transferValue);
+
+    //     // Check that alarm count is 1
+    //     let alarmIndexAfter = await oracle.getTotalAmount();
+    //     expect(alarmIndexAfter).toEqual(1n);
+
+    //     // Watchmaker should send ring msg to oracle 
+    //     let alarmIndex = 1n;
+
+    //     let alarmAddress = await oracle.getGetAlarmAddress(alarmIndex);
+    //     let alarmContract = blockchain.openContract(await Alarm.fromAddress(alarmAddress));
+    // });
 });
