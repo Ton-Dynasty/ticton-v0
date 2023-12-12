@@ -203,7 +203,7 @@ contract Alarm with Initializable {
         if (failed) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } else if (self.remainScale > 0) {
+        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
             // send Chime message to the Oracle to update the price
             baseAssetPrice = self.baseAssetPrice;
         }
@@ -212,14 +212,14 @@ contract Alarm with Initializable {
                 value: (ctx.value - ton("0.02")), // MODEFIED: - ton("0.02")
                 mode: SendIgnoreErrors,
                 body: Chime{
-                    alarmIndex: self.index, // 0
+                    alarmIndex: self.index,
                     timeKeeper: msg.sender,
-                    baseAssetPrice: baseAssetPrice, // 3
+                    baseAssetPrice: baseAssetPrice,
                     createdAt: self.createdAt,
-                    remainScale: self.remainScale, // 0
-                    newScale: msg.buyNum << 1, // 2
-                    refundQuoteAssetAmount: refundQuoteAssetAmount, // 0
-                    refundBaseAssetAmount: refundBaseAssetAmount // 0
+                    remainScale: self.remainScale,
+                    newScale: msg.buyNum << 1,
+                    refundQuoteAssetAmount: refundQuoteAssetAmount,
+                    refundBaseAssetAmount: refundBaseAssetAmount
                 }.toCell()
             }
         );
