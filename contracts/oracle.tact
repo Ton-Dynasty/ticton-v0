@@ -144,6 +144,7 @@ contract Alarm with Initializable {
     }
 
     receive(msg: Tock){
+        dump("WTF");
         // Receive a Tock message from the Oracle, should initialize the parameters
         // This function should be called only once with contract creation
         let sender: Address = sender();
@@ -358,6 +359,7 @@ contract OracleV0 with Deployable, Initializable {
             let sendBackAmount: Int = ((ctx.value - needBaseAssetAmount) - 2 * (ctx.readForwardFee() + STORAGE_FEE));
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
+            dump(sendBackAmount);
             send(SendParameters{
                     to: contractAddress(initCode),
                     value: sendBackAmount,
