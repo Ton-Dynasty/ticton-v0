@@ -1,6 +1,5 @@
 import "@stdlib/deploy";
 import "./library.tact";
-import "./imports/stdlib-ext.fc";
 import "./packages/math/float.fc";
 
 @name(toFloat)
