@@ -329,7 +329,7 @@ describe('Oracle', () => {
             destination: oracle.address,
             response_destination: timekeeper.address,
             custom_payload: null,
-            forward_ton_amount: toNano('10'),
+            forward_ton_amount: toNano('5'),
             forward_payload: beginCell().storeRef(forwardInfo).endCell(),
         };
 
@@ -337,12 +337,12 @@ describe('Oracle', () => {
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
         // watchmaker's jetton wallet
         const timekeeperJettonContract = blockchain.openContract(
-            await ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
+            ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
         );
         const windResult = await timekeeperJettonContract.send(
             timekeeper.getSender(),
             {
-                value: toNano('10'),
+                value: toNano('5'),
             },
             jettonTransfer
         );
@@ -372,7 +372,7 @@ describe('Oracle', () => {
 
         // Check that oracle send Reset msg to Alarm0
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
-        let alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
+        let alarm0 = blockchain.openContract(Alarm.fromAddress(AlarmAddress));
         expect(windResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: AlarmAddress,

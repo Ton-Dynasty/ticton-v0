@@ -334,16 +334,30 @@ contract OracleV0 with Deployable, Initializable {
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
-            if (expireAt > currentTimestamp) {
+            if (currentTimestamp > expireAt) {
                 // Return jetton back if gas is enough
-                // TODO: we can't send this msg to wallet and return jetton back, we have to send jetton transfer msg to send jetton back
-                send(SendParameters{
-                        to: ctx.sender,
-                        value: ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE),
-                        mode: 0,
-                        body: "Invalid Tick message".asComment()
-                    }
-                );
+                if (self.baseAssetWallet != newAddress(0, 0)) {
+                    // TODO: if base asset is not TON, return the base asset back to the Watchmaker
+                    dump("Not implemented yet");
+                }
+                if (self.quoteAssetWallet != newAddress(0, 0)) {
+                    let value: Int = ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE);
+                    send(SendParameters{
+                            to: self.quoteAssetWallet,
+                            value: value,
+                            mode: 0,
+                            body: JettonTransfer{
+                                query_id: 0,
+                                amount: msg.amount,
+                                destination: msg.sender,
+                                response_destination: msg.sender,
+                                custom_payload: null,
+                                forward_ton_amount: 0,
+                                forward_payload: emptySlice()
+                            }.toCell()
+                        }
+                    );
+                }
                 return ;
             }
             // Preserve the baseAssetAmount
@@ -439,15 +453,15 @@ contract OracleV0 with Deployable, Initializable {
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: 0,
+                    value: msg.refundBaseAssetAmount,
                     mode: SendRemainingValue,
                     body: JettonTransfer{
                         query_id: 0,
                         amount: msg.refundQuoteAssetAmount,
                         destination: msg.timeKeeper,
-                        response_destination: myAddress(),
+                        response_destination: msg.timeKeeper,
                         custom_payload: null,
-                        forward_ton_amount: msg.refundBaseAssetAmount,
+                        forward_ton_amount: 0,
                         forward_payload: emptySlice()
                     }.toCell()
                 }
@@ -522,9 +536,9 @@ contract OracleV0 with Deployable, Initializable {
                         query_id: 0,
                         amount: int(msg.baseAssetPrice.mul(msg.remainQuoteAssetScale)),
                         destination: msg.watchmaker,
-                        response_destination: newAddress(0, 0),
+                        response_destination: msg.watchmaker,
                         custom_payload: null,
-                        forward_ton_amount: msg.remainBaseAssetScale,
+                        forward_ton_amount: 0,
                         forward_payload: emptySlice()
                     }.toCell()
                 }
