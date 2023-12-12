@@ -335,6 +335,7 @@ contract OracleV0 with Deployable, Initializable {
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
+            dump(currentTimestamp);
             if (currentTimestamp > expireAt) {
                 // Return jetton back if gas is enough
                 if (self.baseAssetWallet != newAddress(0, 0)) {
