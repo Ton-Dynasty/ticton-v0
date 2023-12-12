@@ -568,6 +568,7 @@ describe('Oracle', () => {
             buyNum: 1n, // The number of scales to buy
             side: 1n, // 0 for baseAsset, 1 for quoteAsset
             quoteAssetAmount: 1n, // The amount of quoteAsset oracle received
+            newBaseAssetPrice: 1n, // The new baseAssetPrice
         };
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
         const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
