@@ -71,6 +71,7 @@ message Announce {
 }
 message Chronoshift {
     queryID: Int;
+    alarmIndex: Int;
     createdAt: Int;
     watchmaker: Address;
     baseAssetPrice: Int as uint256;
@@ -235,6 +236,7 @@ contract Alarm with Initializable {
                 mode: (SendRemainingBalance + SendDestroyIfZero),
                 body: Chronoshift{
                     queryID: msg.queryID,
+                    alarmIndex: self.index,
                     createdAt: self.createdAt,
                     watchmaker: self.watchmaker,
                     baseAssetPrice: self.baseAssetPrice,
@@ -502,6 +504,7 @@ contract OracleV0 with Deployable, Initializable {
 
     receive(msg: Chronoshift){
         self.requireInitialized();
+        self.requireAlarm(msg.alarmIndex);
         if (msg.remainScale > 0) {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
@@ -535,12 +538,12 @@ contract OracleV0 with Deployable, Initializable {
         // Actual formula:
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
+        if (timestamp <= self.latestTimestamp) {
+            return ;
+        }
         if (self.latestTimestamp == 0) {
             self.latestTimestamp = timestamp;
             self.latestBaseAssetPrice = baseAssetPrice;
-            return ;
-        }
-        if (timestamp <= self.latestTimestamp) {
             return ;
         }
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
