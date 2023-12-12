@@ -5,6 +5,9 @@ import "./packages/math/float.fc";
 @name(toFloat)
 native float(value: Int): Int;
 
+@name(toInt)
+native int(value: Int): Int;
+
 @name(toFloat)
 extends native float(self: Int): Int;
 
@@ -510,13 +513,14 @@ contract OracleV0 with Deployable, Initializable {
         }
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
+            // The remain quote token is calculated by the formula:
             send(SendParameters{
-                    to: msg.watchmaker,
+                    to: self.quoteAssetWallet,
                     value: msg.remainQuoteAssetScale,
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
-                        amount: msg.remainQuoteAssetScale * msg.baseAssetPrice,
+                        amount: int(msg.baseAssetPrice.mul(msg.remainQuoteAssetScale)),
                         destination: msg.watchmaker,
                         response_destination: newAddress(0, 0),
                         custom_payload: null,
@@ -526,9 +530,15 @@ contract OracleV0 with Deployable, Initializable {
                 }
             );
             return ;
-        }
-        if (msg.remainBaseAssetScale > 0) {
-            // TODO: Send Jetton Transfer message to refund
+        } else if (msg.remainBaseAssetScale > 0) {
+            //  Refund TON
+            send(SendParameters{
+                    to: self.quoteAssetWallet,
+                    value: msg.remainBaseAssetScale,
+                    mode: SendPayGasSeparately,
+                    body: "SlickBack".asComment()
+                }
+            );
         }
     }
 
