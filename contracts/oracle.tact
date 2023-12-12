@@ -1,11 +1,14 @@
 import "@stdlib/deploy";
 import "./library.tact";
-import "./imports/stdlib-ext.fc";
+import "./packages/math/float.fc";
 
 @name(float)
 native float(value: Int): Int;
 
-@name(float)
+@name(toInt)
+native int(value: Int): Int;
+
+@name(toFloat)
 extends native float(self: Int): Int;
 
 @name(muldiv)
@@ -18,7 +21,6 @@ message Initialize {
 message Tick {
     expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
     baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset
-    scale: Int as uint32; // Scale is a multiplier of the MIN_BASEASSET_TRESHOLD, valid range is [1, 100]
 }
 message Tock {
     scale: Int as uint32;
@@ -60,6 +62,7 @@ message Announce {
 }
 message Chronoshift {
     queryID: Int;
+    alarmIndex: Int;
     createdAt: Int;
     watchmaker: Address;
     baseAssetPrice: Int as uint256;
@@ -92,6 +95,8 @@ message(0x0f8a7ea5) JettonTransfer {
     forward_ton_amount: Int as coins; // the amount of nanotons to be sent to the destination address.
     forward_payload: Slice as remaining; // optional custom data that should be sent to the destination address.
 }
+const BASEASSET_DECIMALS: Int = 1000000000;
+const QUOTEASSET_DECIMALS: Int = 100000;
 const DEPLOY_FEE: Int = ton("0.1");
 const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
@@ -189,23 +194,23 @@ contract Alarm with Initializable, FixedPoint156x100 {
         if (failed) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } else if (self.remainScale > 0) {
+        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
             // send Chime message to the Oracle to update the price
             baseAssetPrice = self.baseAssetPrice;
         }
         send(SendParameters{
                 to: ctx.sender,
-                value: ctx.value - ton("0.02"), // MODEFIED: - ton("0.02")
-                mode: SendIgnoreErrors,
+                value:  (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
+                mode: SendPayGasSeparately,
                 body: Chime{
-                    alarmIndex: self.index, // 0
-                    timeKeeper: msg.sender, 
-                    baseAssetPrice: baseAssetPrice, // 3
+                    alarmIndex: self.index,
+                    timeKeeper: msg.sender,
+                    baseAssetPrice: baseAssetPrice,
                     createdAt: self.createdAt,
-                    remainScale: self.remainScale, // 0
-                    newScale: msg.buyNum << 1, // 2
-                    refundQuoteAssetAmount: refundQuoteAssetAmount, // 0
-                    refundBaseAssetAmount: refundBaseAssetAmount // 0
+                    remainScale: self.remainScale,
+                    newScale: msg.buyNum << 1,
+                    refundQuoteAssetAmount: refundQuoteAssetAmount,
+                    refundBaseAssetAmount: refundBaseAssetAmount
                 }.toCell()
             }
         );
@@ -222,6 +227,7 @@ contract Alarm with Initializable, FixedPoint156x100 {
                 mode: (SendRemainingBalance + SendDestroyIfZero),
                 body: Chronoshift{
                     queryID: msg.queryID,
+                    alarmIndex: self.index,
                     createdAt: self.createdAt,
                     watchmaker: self.watchmaker,
                     baseAssetPrice: self.baseAssetPrice,
@@ -316,8 +322,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
-            let scale: Int = sc.loadUint(32);
-            if (expireAt > currentTimestamp || scale != 1) {
+            if (expireAt > currentTimestamp) {
                 // Return jetton back if gas is enough
                 // TODO: we can't send this msg to wallet and return jetton back, we have to send jetton transfer msg to send jetton back
                 send(SendParameters{
@@ -330,7 +335,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = 1000000000 * msg.amount.float() / baseAssetPrice; // MODIFIED: x 1000000000 to become ton unit
+            let needBaseAssetAmount: Int = msg.amount.float().muldiv(BASEASSET_DECIMALS, baseAssetPrice);
             require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
@@ -346,7 +351,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                     value: sendBackAmount,
                     mode: SendIgnoreErrors,
                     body: Tock{
-                        scale: scale,
+                        scale: 1,
                         createdAt: currentTimestamp,
                         watchmaker: msg.sender,
                         baseAssetPrice: baseAssetPrice
@@ -396,7 +401,6 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         // Receive Chime message from Alarm contract
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
-        // We don't have to check this is after the verified time?
         if (msg.remainScale > 0) {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
@@ -404,7 +408,7 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: ton("0.05"), // MODIFIED: it has to be at least 0.05 ton to initialize a new alarm
+                value: ton("0.05"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
@@ -491,18 +495,20 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
 
     receive(msg: Chronoshift){
         self.requireInitialized();
+        self.requireAlarm(msg.alarmIndex);
         if (msg.remainScale > 0) {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
         // T((ransfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
+            // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
                     value: msg.remainQuoteAssetScale,
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
-                        amount: msg.remainQuoteAssetScale * msg.baseAssetPrice,
+                        amount: int(msg.baseAssetPrice.mul(msg.remainQuoteAssetScale)),
                         destination: msg.watchmaker,
                         response_destination: newAddress(0, 0),
                         custom_payload: null,
@@ -512,21 +518,31 @@ contract OracleV0 with Deployable, Initializable, FixedPoint156x100 {
                 }
             );
             return ;
+        } else if (msg.remainBaseAssetScale > 0) {
+            //  Refund TON
+            send(SendParameters{
+                    to: self.quoteAssetWallet,
+                    value: msg.remainBaseAssetScale,
+                    mode: SendPayGasSeparately,
+                    body: "SlickBack".asComment()
+                }
+            );
         }
-        if (msg.remainBaseAssetScale > 0) {}
     }
 
     inline fun sync(timestamp: Int, baseAssetPrice: Int) {
         // Calculate the weighted average of the baseAssetPrice
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
-        // TODO: pow bug: Cannot reduce expression to a constant integer
-        // TODO: Should we check the msg.createdAt+TIMEPACE is smaller than now()?
-        // let d: Int = (timestamp - self.latestTimestamp) / TIMEPACE;
-        // let w: Int = self.div(self.encode(9), pow((1 - pow(d, 2)), 2)) / 10;
-        // let w: Int = self.div(self.encode(9), 10);
-        let w: Int = float(1) / 10;
-        self.latestBaseAssetPrice = ((w * 9) * self.latestBaseAssetPrice + w * baseAssetPrice);
+        if (timestamp <= self.latestTimestamp) {
+            return ;
+        }
+        if (self.latestTimestamp == 0) {
+            self.latestTimestamp = timestamp;
+            self.latestBaseAssetPrice = baseAssetPrice;
+            return ;
+        }
+        self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {

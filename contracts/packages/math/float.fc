@@ -46,6 +46,10 @@ int div(int floatA, int floatB) inline_ref {
     return (floatA << 64) / floatB;
 }
 
+int toInt(int floatA) inline_ref {
+    return floatA >> 64;
+}
+
 ;; safeAdd function is used to add two fixed point float
 ;; it will check if the value is compatible with fixed point float, if not, it will throw an error
 int safeAdd(int floatA, int floatB) inline_ref {
