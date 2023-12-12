@@ -94,7 +94,7 @@ describe('Oracle', () => {
             ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
         );
 
-        const transfterResult = await watchmakerJettonContract.send(
+        const transferResult = await watchmakerJettonContract.send(
             watchmaker.getSender(),
             { value: toNano(tonToTransfer) },
             jettonTransfer
@@ -103,21 +103,21 @@ describe('Oracle', () => {
         
         let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
          // Check that watchmaker send JettonTransfer msg to her jetton wallet
-        expect(transfterResult.transactions).toHaveTransaction({
+        expect(transferResult.transactions).toHaveTransaction({
             from: watchmaker.address,
             to: watchmakerWalletAddress,
             success: true,
         });
 
         // Check that watchmaker's jetton wallet send JettonInternalTransfer msg to Bob's jetton wallet
-        expect(transfterResult.transactions).toHaveTransaction({
+        expect(transferResult.transactions).toHaveTransaction({
             from: watchmakerWalletAddress,
             to: oracleWalletAddress,
             success: true,
         });
 
         // Check that oracle's jetton wallet send JettonTransferNotification msg to oracle
-        expect(transfterResult.transactions).toHaveTransaction({
+        expect(transferResult.transactions).toHaveTransaction({
             from: oracleWalletAddress,
             to: oracle.address,
             success: true,
@@ -125,7 +125,7 @@ describe('Oracle', () => {
 
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
         //Check that oracle build alarm successfully
-        expect(transfterResult.transactions).toHaveTransaction({
+        expect(transferResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: AlarmAddress,
             success: true,
@@ -136,7 +136,7 @@ describe('Oracle', () => {
         expect(alarmIndex).toEqual(1n);
 
         // Check that alarm send build alarm msg to watchmaker
-        expect(transfterResult.transactions).toHaveTransaction({
+        expect(transferResult.transactions).toHaveTransaction({
             from: AlarmAddress,
             to: watchmaker.address,
             success: true,
@@ -159,7 +159,7 @@ describe('Oracle', () => {
         let remainScale = await alarm0.getGetRemainScale();
         expect(remainScale).toEqual(1n);
 
-        return transfterResult;
+        return transferResult;
     }
 
     async function windInJettonTransfer(
@@ -255,7 +255,7 @@ describe('Oracle', () => {
         // blockchain and oracle are ready to use
     });
 
-    it('should watchmaker sends tick msg to oralce by functions', async () => {
+    it('should watchmaker sends tick msg to oracle by functions', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -284,71 +284,71 @@ describe('Oracle', () => {
         expect(alarmIndex).toEqual(1n);
     });
 
-    // it('Should fail if message is not from oracle', async () => {
-    //     // Initialize oracle
-    //     const initResult = await initializeOracle(oracle, owner);
-    //     // Mint tokens to watchmaker
-    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
-    //     // watchmaker post price to oracle
-    //     const baseAssetPriceAmount = 4; // 1 ton = 4usdt
-    //     const baseAssetAmount = 10; // 10usdt
-    //     const expireAt = blockchain.now!! + 1000;
-    //     const tonToTransfer = 10;
-    //     const transfterResult = await tickInJettonTransfer(
-    //         watchmaker,
-    //         oracle,
-    //         baseAssetPriceAmount,
-    //         baseAssetAmount,
-    //         expireAt,
-    //         tonToTransfer
-    //     );
+    it('Should fail if message is not from oracle', async () => {
+        // Initialize oracle
+        const initResult = await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        const mintyResult = await mintToken(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const baseAssetPriceAmount = 4; // 1 ton = 4usdt
+        const baseAssetAmount = 10; // 10usdt
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
+        const transfterResult = await tickInJettonTransfer(
+            watchmaker,
+            oracle,
+            baseAssetPriceAmount,
+            baseAssetAmount,
+            expireAt,
+            tonToTransfer
+        );
 
-    //     let AlarmAddress = await oracle.getGetAlarmAddress(0n);
-    //     const tockMsg: Tock = {
-    //         $$type: 'Tock',
-    //         scale: 1n,
-    //         createdAt: 0n,
-    //         watchmaker: watchmaker.address,
-    //         baseAssetPrice: BigInt(toUSDT(4).toNumber()),
-    //     };
+        let AlarmAddress = await oracle.getGetAlarmAddress(0n);
+        const tockMsg: Tock = {
+            $$type: 'Tock',
+            scale: 1n,
+            createdAt: 0n,
+            watchmaker: watchmaker.address,
+            baseAssetPrice: BigInt(toUSDT(4).toNumber()),
+        };
 
-    //     const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
-    //     const tockResult = await alarm0.send(
-    //         watchmaker.getSender(),
-    //         {
-    //             value: toNano('10'),
-    //         },
-    //         tockMsg
-    //     );
-    //     // should fail because msg is not from oracle
-    //     expect(tockResult.transactions).toHaveTransaction({
-    //         from: watchmaker.address,
-    //         to: AlarmAddress,
-    //         success: false,
-    //     });
-    // });
+        const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
+        const tockResult = await alarm0.send(
+            watchmaker.getSender(),
+            {
+                value: toNano('10'),
+            },
+            tockMsg
+        );
+        // should fail because msg is not from oracle
+        expect(tockResult.transactions).toHaveTransaction({
+            from: watchmaker.address,
+            to: AlarmAddress,
+            success: false,
+        });
+    });
 
-    // it('Should return funds if remaining ton is sufficient to pay the gas', async () => {
-    //     // TODO: the code in orale for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
-    //     // Initialize oracle
-    //     const initResult = await initializeOracle(oracle, owner);
-    //     // Mint tokens to watchmaker
-    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
-    //     // watchmaker post price to oracle
-    //     const baseAssetPriceAmount = 3; // 1 ton = 3usdt
-    //     const baseAssetAmount = 10; // 10usdt
-    //     const expireAt = blockchain.now!! + 1000;
-    //     const tonToTransfer = 10;
-    //     const transfterResult = await tickInJettonTransfer(
-    //         watchmaker,
-    //         oracle,
-    //         baseAssetPriceAmount,
-    //         baseAssetAmount,
-    //         expireAt,
-    //         tonToTransfer
-    //     );
-    //     //printTransactionFees(transfterResult.transactions);
-    // });
+    it('Should return funds if remaining ton is sufficient to pay the gas', async () => {
+        // TODO: the code in orale for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
+        // Initialize oracle
+        const initResult = await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        const mintyResult = await mintToken(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+        const baseAssetAmount = 10; // 10usdt
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
+        const transfterResult = await tickInJettonTransfer(
+            watchmaker,
+            oracle,
+            baseAssetPriceAmount,
+            baseAssetAmount,
+            expireAt,
+            tonToTransfer
+        );
+        //printTransactionFees(transfterResult.transactions);
+    });
 
     it('Should timekeeper send wind msg to orale', async () => {
         // Initialize oracle
