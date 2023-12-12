@@ -144,7 +144,6 @@ contract Alarm with Initializable {
     }
 
     receive(msg: Tock){
-        dump("WTF");
         // Receive a Tock message from the Oracle, should initialize the parameters
         // This function should be called only once with contract creation
         let sender: Address = sender();
@@ -330,20 +329,19 @@ contract OracleV0 with Deployable, Initializable {
         let ref: Cell = payload.loadRef();
         let sc: Slice = ref.beginParse();
         let opCode: Int = sc.loadUint(8); // 0 means Tick, 1 means Wind
+        let value: Int = ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE);
         if (opCode == 0) {
             // Method: Tick
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
-            dump(currentTimestamp);
-            if (currentTimestamp > expireAt) {
+            if (currentTimestamp > expireAt && value > 0) {
                 // Return jetton back if gas is enough
                 if (self.baseAssetWallet != newAddress(0, 0)) {
                     // TODO: if base asset is not TON, return the base asset back to the Watchmaker
                     dump("Not implemented yet");
                 }
                 if (self.quoteAssetWallet != newAddress(0, 0)) {
-                    let value: Int = ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE);
                     send(SendParameters{
                             to: self.quoteAssetWallet,
                             value: value,
@@ -374,7 +372,6 @@ contract OracleV0 with Deployable, Initializable {
             let sendBackAmount: Int = ((ctx.value - needBaseAssetAmount) - 2 * (ctx.readForwardFee() + STORAGE_FEE));
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
-            dump(sendBackAmount);
             send(SendParameters{
                     to: contractAddress(initCode),
                     value: sendBackAmount,
