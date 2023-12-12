@@ -530,11 +530,11 @@ contract OracleV0 with Deployable, Initializable {
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: msg.remainQuoteAssetScale,
+                    value: msg.remainQuoteAssetScale * BASEASSET_DECIMALS,
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
-                        amount: int(msg.baseAssetPrice.mul(msg.remainQuoteAssetScale)),
+                        amount: int(msg.baseAssetPrice.mul(msg.remainQuoteAssetScale) * QUOTEASSET_DECIMALS),
                         destination: msg.watchmaker,
                         response_destination: msg.watchmaker,
                         custom_payload: null,

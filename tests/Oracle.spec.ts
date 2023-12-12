@@ -1206,8 +1206,7 @@ describe('Oracle', () => {
             ring
         );
 
-        // prettyLogTransactions(ringResult.transactions);
-        // printTransactionFees(ringResult.transactions);
+        printTransactionFees(ringResult.transactions);
 
         // Get the balance of watchmaker's jetton wallet
         let balanceAfter = (await watchmakerJettonWallet.getGetWalletData()).balance;
