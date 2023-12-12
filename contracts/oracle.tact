@@ -408,7 +408,6 @@ contract OracleV0 with Deployable, Initializable {
         // Receive Chime message from Alarm contract
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
-        // We don't have to check this is after the verified time?
         if (msg.remainScale > 0) {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
@@ -539,6 +538,9 @@ contract OracleV0 with Deployable, Initializable {
         if (self.latestTimestamp == 0) {
             self.latestTimestamp = timestamp;
             self.latestBaseAssetPrice = baseAssetPrice;
+            return ;
+        }
+        if (timestamp <= self.latestTimestamp) {
             return ;
         }
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
