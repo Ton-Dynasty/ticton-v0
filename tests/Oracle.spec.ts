@@ -329,7 +329,7 @@ describe('Oracle', () => {
     });
 
     it('Should return funds if remaining ton is sufficient to pay the gas', async () => {
-        // TODO: the code in orale for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
+        // TODO: the code in oracle for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
         // Initialize oracle
         const initResult = await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -350,7 +350,7 @@ describe('Oracle', () => {
         //printTransactionFees(transfterResult.transactions);
     });
 
-    it('Should timekeeper send wind msg to orale', async () => {
+    it('Should timekeeper send wind msg to oracle', async () => {
         // Initialize oracle
         const initResult = await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -411,27 +411,27 @@ describe('Oracle', () => {
         );
         //printTransactionFees(windResult.transactions);
 
-    //     // Check that timekeeper send JettonTransfer msg to her jetton wallet
-    //     expect(windResult.transactions).toHaveTransaction({
-    //         from: timekeeper.address,
-    //         to: timekeeperWalletAddress,
-    //         success: true,
-    //     });
+        // Check that timekeeper send JettonTransfer msg to her jetton wallet
+        expect(windResult.transactions).toHaveTransaction({
+            from: timekeeper.address,
+            to: timekeeperWalletAddress,
+            success: true,
+        });
 
-    //     const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
-    //     // Check that timekeeper's jetton wallet send JettonInternalTransfer msg to oracle's jetton wallet
-    //     expect(windResult.transactions).toHaveTransaction({
-    //         from: timekeeperWalletAddress,
-    //         to: oracleWalletAddress,
-    //         success: true,
-    //     });
+        const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+        // Check that timekeeper's jetton wallet send JettonInternalTransfer msg to oracle's jetton wallet
+        expect(windResult.transactions).toHaveTransaction({
+            from: timekeeperWalletAddress,
+            to: oracleWalletAddress,
+            success: true,
+        });
 
-    //     // Check that oracle's jetton wallet send JettonTransferNotification msg to oracle
-    //     expect(windResult.transactions).toHaveTransaction({
-    //         from: oracleWalletAddress,
-    //         to: oracle.address,
-    //         success: true,
-    //     });
+        // Check that oracle's jetton wallet send JettonTransferNotification msg to oracle
+        expect(windResult.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: oracle.address,
+            success: true,
+        });
 
         // Check that oracle send Reset msg to Alarm0
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
