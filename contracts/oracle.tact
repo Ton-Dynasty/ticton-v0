@@ -212,8 +212,8 @@ contract Alarm with Initializable {
         }
         send(SendParameters{
                 to: ctx.sender,
-                value: (ctx.value - ton("0.02")), // MODEFIED: - ton("0.02")
-                mode: SendIgnoreErrors,
+                value:  (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
+                mode: SendPayGasSeparately,
                 body: Chime{
                     alarmIndex: self.index,
                     timeKeeper: msg.sender,
@@ -420,7 +420,7 @@ contract OracleV0 with Deployable, Initializable {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: ton("0.02"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
+                value: ton("0.05"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
