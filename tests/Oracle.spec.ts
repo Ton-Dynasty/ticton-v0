@@ -211,6 +211,7 @@ describe('Oracle', () => {
         blockchain = await Blockchain.create();
         owner = await blockchain.treasury('owner');
         watchmaker = await blockchain.treasury('watchmaker');
+        blockchain.now = Math.floor(Date.now() / 1000);
         const jetton_content: Cell = beginCell().endCell();
         jettonMaster = blockchain.openContract(await ExampleJettonMaster.fromInit(owner.address, jetton_content));
 
@@ -266,7 +267,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const quoteAssetPerBaseAsset = 4; // 4 usdt for 1 ton
         const quoteAssetToTransfer = 10; // expected to transfer 10 usdt
-        const expireAt = 1000; // the price will be expired at 1000 logic time
+        const expireAt = blockchain.now!! + 1000; // the price will be expired at 1000 logic time
         const tonToTransfer = 10; // expected to transfer 10 ton
         const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
         const jettonTransferResult = await tickInJettonTransfer(
@@ -295,7 +296,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 4; // 1 ton = 4usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -340,7 +341,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -361,7 +362,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -506,7 +507,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -554,7 +555,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -597,7 +598,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -644,7 +645,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
+        const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -698,17 +699,15 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
             oracle,
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
         // Check that alarm count is 1
         let alarmIndexAfter = await oracle.getTotalAmount();
@@ -743,17 +742,15 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
             oracle,
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
         // Check that alarm count is 1
         let alarmIndexAfter = await oracle.getTotalAmount();
@@ -793,9 +790,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -803,8 +799,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -850,9 +845,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -860,8 +854,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -911,9 +904,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -921,8 +913,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -941,6 +932,7 @@ describe('Oracle', () => {
             $$type: 'Chronoshift',
             queryID: 0n,
             createdAt: 0n,
+            alarmIndex: alarmIndex,
             watchmaker: watchmaker.address,
             baseAssetPrice: BigInt(baseAssetPriceAmount),
             remainScale: 1n,
@@ -974,9 +966,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -984,8 +975,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -998,7 +988,8 @@ describe('Oracle', () => {
         let alarmAddress = await oracle.getGetAlarmAddress(alarmIndex);
         let alarmContract = blockchain.openContract(await Alarm.fromAddress(alarmAddress));
 
-        // TODO: wait for 60 seconds on the blockchain
+        // TODO: wait for 100 seconds on the blockchain
+        blockchain.now = blockchain.now!! + 100;
 
         // Watchmaker send ring msg to oracle
         let ring: Ring = {
@@ -1031,9 +1022,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -1041,8 +1031,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -1073,12 +1062,15 @@ describe('Oracle', () => {
         let alarmIndexBefore = 0;
         let buyNum = 1;
         let side = 0;
-        let windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndexBefore, buyNum, side, transferValue);
+        let windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndexBefore, buyNum, side, tonToTransfer);
         // printTransactionFees(windResult.transactions);
 
         // Check that remainScale of alarm0 is 0
         let remainScale = await alarmContract.getGetRemainScale();
         expect(remainScale).toEqual(0n);
+
+        // TODO: wait for 100 seconds on the blockchain
+        blockchain.now = blockchain.now!! + 100;
 
         // Watchmaker send ring msg to oracle
         let ring: Ring = {
@@ -1096,6 +1088,8 @@ describe('Oracle', () => {
 
         // Check the latest price is not updated
         let latestPriceAfter = await oracle.getGetLatestBaseAssetPrice();
+        // console.log('latestPrice: ', latestPrice);
+        // console.log('latestPriceAfter: ', latestPriceAfter);
         expect(latestPriceAfter).toEqual(latestPrice);
     });
 
@@ -1110,9 +1104,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 100;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -1120,8 +1113,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -1167,9 +1159,8 @@ describe('Oracle', () => {
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
         const baseAssetAmount = 10; // 10usdt
 
-        const expireAt = 1000;
-        const transferValue = 10;
-        const scale = 1;
+        const expireAt = blockchain.now!! + 1000;
+        const tonToTransfer = 10;
 
         const transfterResult = await tickInJettonTransfer(
             watchmaker,
@@ -1177,8 +1168,7 @@ describe('Oracle', () => {
             baseAssetPriceAmount,
             baseAssetAmount,
             expireAt,
-            scale,
-            transferValue
+            tonToTransfer
         );
 
         // Check that alarm count is 1
@@ -1191,7 +1181,9 @@ describe('Oracle', () => {
         let alarmAddress = await oracle.getGetAlarmAddress(alarmIndex);
         let alarmContract = blockchain.openContract(await Alarm.fromAddress(alarmAddress));
 
-        // TODO: Wait for 60 seconds on the blockchain
+        // TODO: Wait for 100 seconds on the blockchain
+        blockchain.now = blockchain.now!! + 100;
+
         let watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
         let watchmakerJettonWallet = blockchain.openContract(
             await ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
@@ -1213,8 +1205,8 @@ describe('Oracle', () => {
             ring
         );
 
-        prettyLogTransactions(ringResult.transactions);
-        printTransactionFees(ringResult.transactions);
+        // prettyLogTransactions(ringResult.transactions);
+        // printTransactionFees(ringResult.transactions);
 
         // Get the balance of watchmaker's jetton wallet
         let balanceAfter = (await watchmakerJettonWallet.getGetWalletData()).balance;

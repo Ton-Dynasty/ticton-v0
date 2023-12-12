@@ -206,7 +206,7 @@ contract Alarm with Initializable {
         if (failed) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
+        } else if (self.remainScale > 0) {
             // send Chime message to the Oracle to update the price
             baseAssetPrice = self.baseAssetPrice;
         }
@@ -334,7 +334,7 @@ contract OracleV0 with Deployable, Initializable {
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
-            if (expireAt > currentTimestamp) {
+            if (expireAt < currentTimestamp) {
                 // Return jetton back if gas is enough
                 // TODO: we can't send this msg to wallet and return jetton back, we have to send jetton transfer msg to send jetton back
                 send(SendParameters{
@@ -548,6 +548,9 @@ contract OracleV0 with Deployable, Initializable {
         // Actual formula:
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
+        if (now() <= (timestamp + TIMEPACE)){
+            return ;
+        }
         if (timestamp <= self.latestTimestamp) {
             return ;
         }
