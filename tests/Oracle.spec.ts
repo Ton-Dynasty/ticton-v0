@@ -14,6 +14,13 @@ const BASEASSET_DECIMALS = 9;
 
 const toUSDT = (amount: number | string | Decimal) => toToken(amount, QUOTEASSET_DECIMALS);
 const toTON = (amount: number | string | Decimal) => toToken(amount, BASEASSET_DECIMALS);
+const toBigInt = (amount: number | string | Decimal) =>
+    BigInt(
+        new Decimal(amount)
+            .times(10 ** 9)
+            .floor()
+            .toString()
+    );
 
 describe('Oracle', () => {
     let blockchain: Blockchain;
@@ -79,11 +86,11 @@ describe('Oracle', () => {
         const jettonTransfer: JettonTransfer = {
             $$type: 'JettonTransfer',
             query_id: 0n,
-            amount: BigInt(quoteAssetTransferred.toNumber()),
+            amount: toBigInt(quoteAssetTransferred),
             destination: oracle.address,
             response_destination: watchmaker.address,
             custom_payload: null,
-            forward_ton_amount: BigInt(forwardTonAmount.toNumber()),
+            forward_ton_amount: toBigInt(forwardTonAmount),
             forward_payload: beginCell().storeRef(forwardInfo).endCell(),
         };
 
