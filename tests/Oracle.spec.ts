@@ -14,13 +14,7 @@ const BASEASSET_DECIMALS = 9;
 
 const toUSDT = (amount: number | string | Decimal) => toToken(amount, QUOTEASSET_DECIMALS);
 const toTON = (amount: number | string | Decimal) => toToken(amount, BASEASSET_DECIMALS);
-const toBigInt = (amount: number | string | Decimal) =>
-    BigInt(
-        new Decimal(amount)
-            .times(10 ** 9)
-            .floor()
-            .toString()
-    );
+const toBigInt = (amount: number | string | Decimal) => BigInt(new Decimal(amount).floor().toString());
 
 describe('Oracle', () => {
     let blockchain: Blockchain;
