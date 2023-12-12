@@ -13,6 +13,7 @@
         "@ton-community/test-utils": "^0.3.0",
         "@types/jest": "^29.5.0",
         "@types/node": "^20.2.5",
+        "decimal.js": "^10.4.3",
         "jest": "^29.5.0",
         "prettier": "^2.8.6",
         "ton": "~13.6.0",

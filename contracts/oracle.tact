@@ -31,7 +31,6 @@ message Initialize {
 message Tick {
     expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
     baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset
-    scale: Int as uint32; // Scale is a multiplier of the MIN_BASEASSET_TRESHOLD, valid range is [1, 100]
 }
 message Tock {
     scale: Int as uint32;
@@ -105,8 +104,8 @@ message(0x0f8a7ea5) JettonTransfer {
     forward_ton_amount: Int as coins; // the amount of nanotons to be sent to the destination address.
     forward_payload: Slice as remaining; // optional custom data that should be sent to the destination address.
 }
-const BASEASSET_DECIMALS: Int = 10;
-const QUOTEASSET_DECIMALS: Int = 6;
+const BASEASSET_DECIMALS: Int = 1000000000;
+const QUOTEASSET_DECIMALS: Int = 100000;
 const DEPLOY_FEE: Int = ton("0.1");
 const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
@@ -331,8 +330,7 @@ contract OracleV0 with Deployable, Initializable {
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
-            let scale: Int = sc.loadUint(32);
-            if (expireAt > currentTimestamp || scale != 1) {
+            if (expireAt > currentTimestamp) {
                 // Return jetton back if gas is enough
                 // TODO: we can't send this msg to wallet and return jetton back, we have to send jetton transfer msg to send jetton back
                 send(SendParameters{
@@ -345,7 +343,7 @@ contract OracleV0 with Deployable, Initializable {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = BASEASSET_DECIMALS * msg.amount.float() / baseAssetPrice; // MODIFIED: x 1000000000 to become ton unit
+            let needBaseAssetAmount: Int = msg.amount.float().muldiv(BASEASSET_DECIMALS, baseAssetPrice);
             require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
@@ -361,7 +359,7 @@ contract OracleV0 with Deployable, Initializable {
                     value: sendBackAmount,
                     mode: SendIgnoreErrors,
                     body: Tock{
-                        scale: scale,
+                        scale: 1,
                         createdAt: currentTimestamp,
                         watchmaker: msg.sender,
                         baseAssetPrice: baseAssetPrice
@@ -419,7 +417,7 @@ contract OracleV0 with Deployable, Initializable {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: ton("0.05"), // MODIFIED: it has to be at least 0.05 ton to initialize a new alarm
+                value: ton("0.02"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
