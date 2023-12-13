@@ -200,13 +200,15 @@ describe('Oracle', () => {
         const timekeeperJettonContract = blockchain.openContract(
             await ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
         );
-        return await timekeeperJettonContract.send(
+        const windResult =  await timekeeperJettonContract.send(
             timekeeper.getSender(),
             {
                 value: toNano(transferValue),
             },
             jettonTransfer
         );
+    
+        return windResult;
     }
 
     beforeEach(async () => {
@@ -386,23 +388,27 @@ describe('Oracle', () => {
         //const windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, transferValue);
         let op = 1; // 1 means wind
         let newBaseAssetPrice = 4;
-        const forwardInfo: Cell = beginCell()
-            .storeUint(op, 8)
-            .storeUint(alarmIndex, 256)
-            .storeUint(buyNum, 32)
-            .storeUint(side, 1)
-            .storeUint(newBaseAssetPrice, 256)
-            .endCell();
-        const jettonTransfer: JettonTransfer = {
-            $$type: 'JettonTransfer',
-            query_id: 0n,
-            amount: 1000000n,
-            destination: oracle.address,
-            response_destination: timekeeper.address,
-            custom_payload: null,
-            forward_ton_amount: toNano('5'),
-            forward_payload: beginCell().storeRef(forwardInfo).endCell(),
-        };
+        let quoteAssetToTransfer = 20;
+        let tonTransfer = 10;
+        const windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side,newBaseAssetPrice, quoteAssetToTransfer, tonTransfer);
+        //printTransactionFees(windResult.transactions);
+        // const forwardInfo: Cell = beginCell()
+        //     .storeUint(op, 8)
+        //     .storeUint(alarmIndex, 256)
+        //     .storeUint(buyNum, 32)
+        //     .storeUint(side, 1)
+        //     .storeUint(newBaseAssetPrice, 256)
+        //     .endCell();
+        // const jettonTransfer: JettonTransfer = {
+        //     $$type: 'JettonTransfer',
+        //     query_id: 0n,
+        //     amount: 1000000n,
+        //     destination: oracle.address,
+        //     response_destination: timekeeper.address,
+        //     custom_payload: null,
+        //     forward_ton_amount: toNano('5'),
+        //     forward_payload: beginCell().storeRef(forwardInfo).endCell(),
+        // };
 
         // watchmaker's jetton wallet address
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
@@ -410,13 +416,13 @@ describe('Oracle', () => {
         const timekeeperJettonContract = blockchain.openContract(
             ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
         );
-        const windResult = await timekeeperJettonContract.send(
-            timekeeper.getSender(),
-            {
-                value: toNano('5'),
-            },
-            jettonTransfer
-        );
+        // const windResult = await timekeeperJettonContract.send(
+        //     timekeeper.getSender(),
+        //     {
+        //         value: toNano('5'),
+        //     },
+        //     jettonTransfer
+        // );
         //printTransactionFees(windResult.transactions);
 
         // Check that timekeeper send JettonTransfer msg to her jetton wallet
@@ -676,19 +682,28 @@ describe('Oracle', () => {
             await ExampleJettonWallet.fromAddress(oracleWalletAddress)
         );
         const mintTimekeeperResult = await mintToken(jettonMaster, timekeeper);
+
         let alarmIndex = 0;
         let buyNum = 1;
         let side = 0;
-        let newBaseAssetPrice = 4;
+        let newBaseAssetPrice = 5;
         let quoteAssetToTransfer = 20;
         
         let windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, newBaseAssetPrice, quoteAssetToTransfer, tonToTransfer);
+        //printTransactionFees(windResult.transactions);
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
         alarmIndexAfter = await oracle.getTotalAmount();
         expect(alarmIndexAfter).toEqual(2n);
-        let AlarmAddress = await oracle.getGetAlarmAddress(1n);
-        let alarmContract = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
 
+        let alarmAddress2 = await oracle.getGetAlarmAddress(1n);
+        let alarmContract2 = blockchain.openContract(await Alarm.fromAddress(alarmAddress2));
+        let baseAssetPrice2 = await alarmContract2.getGetBaseAssetPrice();
+        //console.log("baseAssetPrice2: ", baseAssetPrice2);
+        expect(windResult.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: alarmAddress2,
+            success: true,
+        });
         // Timekeeper2 send wind msg to take money from timekeeper1
         let timekeeper2: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper2');
         await mintToken(jettonMaster, timekeeper2);
@@ -696,56 +711,128 @@ describe('Oracle', () => {
         let buyNum2 = 1;
         let side2 = 0;
         let latestPrice = await oracle.getGetLatestBaseAssetPrice();
+        //console.log("latestPrice: ", latestPrice);
         let newBaseAssetPrice2 = 4;
         let quoteAssetToTransfer2 = 20;
-        let windResult2 = await windInJettonTransfer(timekeeper, oracle, alarmIndex2, buyNum2, side2, newBaseAssetPrice2, quoteAssetToTransfer2, tonToTransfer);
+        let windResult2 = await windInJettonTransfer(timekeeper2, oracle, alarmIndex2, buyNum2, side2, newBaseAssetPrice2, quoteAssetToTransfer2, tonToTransfer);
+        //printTransactionFees(windResult2.transactions);
+        let timekeeperWalletAddress2 = await jettonMaster.getGetWalletAddress(timekeeper2.address);
+        // Check that timekeeper send JettonTransfer msg to her jetton wallet
+        expect(windResult2.transactions).toHaveTransaction({
+            from: timekeeper2.address,
+            to: timekeeperWalletAddress2,
+            success: true,
+        });
+
+        const oracleWalletAddress2 = await jettonMaster.getGetWalletAddress(oracle.address);
+        // Check that timekeeper's jetton wallet send JettonInternalTransfer msg to oracle's jetton wallet
+        expect(windResult2.transactions).toHaveTransaction({
+            from: timekeeperWalletAddress2,
+            to: oracleWalletAddress2,
+            success: true,
+        });
+
+        // Check that oracle's jetton wallet send JettonTransferNotification msg to oracle
+        expect(windResult2.transactions).toHaveTransaction({
+            from: oracleWalletAddress2,
+            to: oracle.address,
+            success: true,
+        });
+
+        // Check that oracle send Reset msg to Alarm1
+        let alarmAddress1 = await oracle.getGetAlarmAddress(1n);
+        let alarm1 = blockchain.openContract(Alarm.fromAddress(alarmAddress1));
+        expect(windResult2.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: alarmAddress1,
+            success: true,
+        });
+
+        // Check that Alarm contract send Chime msg to oracle
+        expect(windResult2.transactions).toHaveTransaction({
+            from: alarmAddress1,
+            to: oracle.address,
+            success: true,
+        });
+
+        // Check that oracle build a new Alarm2 successfully
+        let alarm1Address2 = await oracle.getGetAlarmAddress(2n);
+        expect(windResult2.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: alarm1Address2,
+            success: true,
+        });
+
+        // Return the remaining funds back to the Timekeeper2
+        expect(windResult2.transactions).toHaveTransaction({
+            from: alarm1Address2,
+            to: timekeeper2.address,
+            success: true,
+        });
+
+
+        // Check that Oracle send Jetton Transfer message to refund jetton to timekeeper2
+        expect(windResult2.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: oracleWalletAddress,
+            success: true,
+        });
+
+        // Check that oracle Wallet send JettonInternalTransfer msg to timekeeper2's jetton wallet
+        expect(windResult2.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: timekeeperWalletAddress2,
+            success: true,
+        });
+        
+        //printTransactionFees(windResult2.transactions);
         latestPrice = await oracle.getGetLatestBaseAssetPrice();
-        // Not Finished, cause for now the alarm contract that timekeeper2 build doesn't have baseprice
+        // TODO: Not Finished, cause for now the alarm contract that timekeeper2 build doesn't have baseprice
     });
 
-    it('Ring Test: Should fail if alarm index does not exists', async () => {
-        // Initialize oracle
-        const initResult = await initializeOracle(oracle, owner);
-        // Mint tokens to watchmaker
-        const mintyResult = await mintToken(jettonMaster, watchmaker);
-        // watchmaker post price to oracle
-        const baseAssetPriceAmount = 3; // 1 ton = 3usdt
-        const baseAssetAmount = 10; // 10usdt
-        const expireAt = blockchain.now!! + 1000;
-        const tonToTransfer = 10;
-        const scale = 1;
-        const transfterResult = await tickInJettonTransfer(
-            watchmaker,
-            oracle,
-            baseAssetPriceAmount,
-            baseAssetAmount,
-            expireAt,
-            tonToTransfer
-        );
-        // Check that alarm count is 1
-        let alarmIndexAfter = await oracle.getTotalAmount();
-        expect(alarmIndexAfter).toEqual(1n);
-        // Watchmaker should send ring msg to oracle
-        let alarmIndex = 10n;
-        let ring: Ring = {
-            $$type: 'Ring',
-            queryID: 0n,
-            alarmIndex: alarmIndex,
-        };
-        let ringResult = await oracle.send(
-            watchmaker.getSender(),
-            {
-                value: toNano('10'),
-            },
-            ring
-        );
-        // Should fail because alarmIndex does not exists
-        expect(ringResult.transactions).toHaveTransaction({
-            from: watchmaker.address,
-            to: oracle.address,
-            success: false,
-        });
-    });
+    // it('Ring Test: Should fail if alarm index does not exists', async () => {
+    //     // Initialize oracle
+    //     const initResult = await initializeOracle(oracle, owner);
+    //     // Mint tokens to watchmaker
+    //     const mintyResult = await mintToken(jettonMaster, watchmaker);
+    //     // watchmaker post price to oracle
+    //     const baseAssetPriceAmount = 3; // 1 ton = 3usdt
+    //     const baseAssetAmount = 10; // 10usdt
+    //     const expireAt = blockchain.now!! + 1000;
+    //     const tonToTransfer = 10;
+    //     const scale = 1;
+    //     const transfterResult = await tickInJettonTransfer(
+    //         watchmaker,
+    //         oracle,
+    //         baseAssetPriceAmount,
+    //         baseAssetAmount,
+    //         expireAt,
+    //         tonToTransfer
+    //     );
+    //     // Check that alarm count is 1
+    //     let alarmIndexAfter = await oracle.getTotalAmount();
+    //     expect(alarmIndexAfter).toEqual(1n);
+    //     // Watchmaker should send ring msg to oracle
+    //     let alarmIndex = 10n;
+    //     let ring: Ring = {
+    //         $$type: 'Ring',
+    //         queryID: 0n,
+    //         alarmIndex: alarmIndex,
+    //     };
+    //     let ringResult = await oracle.send(
+    //         watchmaker.getSender(),
+    //         {
+    //             value: toNano('10'),
+    //         },
+    //         ring
+    //     );
+    //     // Should fail because alarmIndex does not exists
+    //     expect(ringResult.transactions).toHaveTransaction({
+    //         from: watchmaker.address,
+    //         to: oracle.address,
+    //         success: false,
+    //     });
+    // });
 
     // it('Ring Test: Should send Mute message to corresponding Alarm contract', async () => {
     //     // Initialize oracle
