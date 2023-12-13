@@ -235,7 +235,7 @@ contract Alarm with Initializable {
         send(SendParameters{
                 to: ctx.sender,
                 value: (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
-                mode: SendPayGasSeparately,
+                mode: SendIgnoreErrors,
                 body: Chime{
                     alarmIndex: self.index,
                     timeKeeper: msg.sender,
@@ -463,7 +463,7 @@ contract OracleV0 with Deployable, Initializable {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: ton("0.05"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
+                value: ton("0.04"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
@@ -478,15 +478,16 @@ contract OracleV0 with Deployable, Initializable {
         self.totalAlarms = (self.totalAlarms + 1); // MODIFIED: Miss to add totalAlarms
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
-        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
+        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee()); 
         if (msg.refundBaseAssetAmount > 0) {
             standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
         }
+
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: msg.refundBaseAssetAmount,
+                    value: 0, // MODIFIED: from msg.refundBaseAssetAmount to 0. 
                     mode: SendRemainingValue,
                     body: JettonTransfer{
                         query_id: 0,
