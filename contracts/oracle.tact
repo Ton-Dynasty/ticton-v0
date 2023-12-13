@@ -90,6 +90,9 @@ message Chime {
     newBaseAssetPrice: Int as uint256;
     newScale: Int;
     refundQuoteAssetAmount: Int;
+    baseAssetPrice: Int as uint256;
+    createdAt: Int;
+    remainScale: Int;
 }
 message(0x7362d09c) JettonTransferNotification {
     query_id: Int as uint64; // arbitrary request number
@@ -223,7 +226,10 @@ contract Alarm with Initializable {
         if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } 
+        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
+            // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
+            baseAssetPrice = self.baseAssetPrice;
+        }
         send(SendParameters{
                 to: ctx.sender,
                 value: (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
@@ -233,7 +239,10 @@ contract Alarm with Initializable {
                     timeKeeper: msg.sender,
                     newBaseAssetPrice: msg.newBaseAssetPrice, // Change to the new baseAssetPrice
                     newScale: msg.buyNum << 1,
-                    refundQuoteAssetAmount: refundQuoteAssetAmount
+                    refundQuoteAssetAmount: refundQuoteAssetAmount,
+                    baseAssetPrice: baseAssetPrice,
+                    createdAt: self.createdAt,
+                    remainScale: self.remainScale
                 }.toCell()
             }
         );
@@ -445,6 +454,9 @@ contract OracleV0 with Deployable, Initializable {
         // Receive Chime message from Alarm contract
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
+        if (msg.remainScale > 0) {
+            self.sync(msg.createdAt, msg.baseAssetPrice);
+        }
         // Deploy a new alarm contract
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
@@ -581,7 +593,6 @@ contract OracleV0 with Deployable, Initializable {
             // Ignore the old timestamp
             return ;
         }
-
         if (self.latestTimestamp == 0) {
             self.latestTimestamp = timestamp;
             self.latestBaseAssetPrice = baseAssetPrice;

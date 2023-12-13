@@ -399,7 +399,7 @@ describe('Oracle', () => {
         const timekeeperJettonContract = blockchain.openContract(
             ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
         );
-        
+
         // Check that timekeeper send JettonTransfer msg to her jetton wallet
         expect(windResult.transactions).toHaveTransaction({
             from: timekeeper.address,
@@ -604,6 +604,9 @@ describe('Oracle', () => {
             newBaseAssetPrice: 1n,
             newScale: 1n,
             refundQuoteAssetAmount: 1n,
+            baseAssetPrice: 1n,
+            createdAt: 1n,
+            remainScale: 1n,
         };
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
         const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
@@ -673,6 +676,8 @@ describe('Oracle', () => {
         // Timekeeper2 send wind msg to take money from timekeeper1
         let timekeeper2: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper2');
         await mintToken(jettonMaster, timekeeper2);
+
+        blockchain.now = Math.floor(Date.now() / 1000) + 61; // Wating for 61 seconds to pass the verification period
         
         let alarmIndex2 = 1;
         let buyNum2 = 1;
@@ -681,6 +686,10 @@ describe('Oracle', () => {
         let quoteAssetToTransfer2 = 20;
         let windResult2 = await windInJettonTransfer(timekeeper2, oracle, alarmIndex2, buyNum2, side2, newBaseAssetPrice2, quoteAssetToTransfer2, tonToTransfer);
         let timekeeperWalletAddress2 = await jettonMaster.getGetWalletAddress(timekeeper2.address);
+
+        // Check that after timekeeper wind and he didn't buy all assets, the LatestBaseAssetPrice will be update to the price that miner set
+        let latestPrice = await oracle.getGetLatestBaseAssetPrice();
+        expect(latestPrice).toEqual(BigInt(newBaseAssetPrice));
 
         // Check that timekeeper send JettonTransfer msg to her jetton wallet
         expect(windResult2.transactions).toHaveTransaction({
