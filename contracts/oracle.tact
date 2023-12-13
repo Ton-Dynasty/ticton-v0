@@ -87,11 +87,8 @@ message Chronoshift {
 message Chime {
     alarmIndex: Int;
     timeKeeper: Address;
-    createdAt: Int;
-    baseAssetPrice: Int as uint256;
-    remainScale: Int;
+    newBaseAssetPrice: Int as uint256;
     newScale: Int;
-    refundBaseAssetAmount: Int;
     refundQuoteAssetAmount: Int;
 }
 message(0x7362d09c) JettonTransferNotification {
@@ -223,15 +220,10 @@ contract Alarm with Initializable {
         }
         // Check base asset and quote asset is sufficient
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
-        refundBaseAssetAmount = (ctx.value - needQuoteAssetAmount);
         if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-            refundBaseAssetAmount = 0; // 0 means return as much as possible
-        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
-            // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
-            baseAssetPrice = self.baseAssetPrice;
-        }
+        } 
         send(SendParameters{
                 to: ctx.sender,
                 value: (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
@@ -239,12 +231,9 @@ contract Alarm with Initializable {
                 body: Chime{
                     alarmIndex: self.index,
                     timeKeeper: msg.sender,
-                    baseAssetPrice: baseAssetPrice,
-                    createdAt: self.createdAt,
-                    remainScale: self.remainScale,
+                    newBaseAssetPrice: msg.newBaseAssetPrice, // Change to the new baseAssetPrice
                     newScale: msg.buyNum << 1,
-                    refundQuoteAssetAmount: refundQuoteAssetAmount,
-                    refundBaseAssetAmount: refundBaseAssetAmount
+                    refundQuoteAssetAmount: refundQuoteAssetAmount
                 }.toCell()
             }
         );
@@ -456,9 +445,6 @@ contract OracleV0 with Deployable, Initializable {
         // Receive Chime message from Alarm contract
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
-        if (msg.remainScale > 0) {
-            self.sync(msg.createdAt, msg.baseAssetPrice);
-        }
         // Deploy a new alarm contract
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
@@ -469,7 +455,7 @@ contract OracleV0 with Deployable, Initializable {
                     createdAt: now(),
                     scale: msg.newScale,
                     watchmaker: msg.timeKeeper,
-                    baseAssetPrice: msg.baseAssetPrice
+                    baseAssetPrice: msg.newBaseAssetPrice
                 }.toCell(),
                 code: initCode.code,
                 data: initCode.data
@@ -479,10 +465,9 @@ contract OracleV0 with Deployable, Initializable {
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
         let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee()); 
-        if (msg.refundBaseAssetAmount > 0) {
-            standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
-        }
-
+        // if (msg.refundBaseAssetAmount > 0) {
+        //     standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
+        // }
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
@@ -591,15 +576,18 @@ contract OracleV0 with Deployable, Initializable {
         // Actual formula:
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
+
+        if (timestamp <= self.latestTimestamp || baseAssetPrice == 0) {
+            // Ignore the old timestamp
+            return ;
+        }
+
         if (self.latestTimestamp == 0) {
             self.latestTimestamp = timestamp;
             self.latestBaseAssetPrice = baseAssetPrice;
             return ;
         }
-        if (timestamp <= self.latestTimestamp || baseAssetPrice == 0) {
-            // Ignore the old timestamp
-            return ;
-        }
+        
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
     }
 
