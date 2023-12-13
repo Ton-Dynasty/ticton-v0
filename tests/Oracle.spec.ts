@@ -1,4 +1,4 @@
-import { Alarm } from './../build/Oracle/tact_Alarm';
+import { Alarm } from '../build/Oracle/tact_Alarm';
 import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
 import { Address, Cell, address, beginCell, toNano } from 'ton-core';
 import { Chime, JettonTransfer, OracleV0, Reset, Tock } from '../wrappers/Oracle_OracleV0';
@@ -168,23 +168,29 @@ describe('Oracle', () => {
         alarmIndex: number,
         buyNum: number,
         side: number,
+        newBaseAssetPrice: number,
+        quoteAssetToTransfer: number,
         transferValue: number
     ) {
         let op = 1; // 1 means wind
+        const baseAssetPrice = float(toUSDT(newBaseAssetPrice));
+        const quoteAssetTransferred = toUSDT(quoteAssetToTransfer);
+        const forwardTonAmount = toTON(float(quoteAssetTransferred).div(baseAssetPrice)).add(toTON(0.055));
         const forwardInfo: Cell = beginCell()
             .storeUint(op, 8)
             .storeUint(alarmIndex, 256)
             .storeUint(buyNum, 32)
             .storeUint(side, 1)
+            .storeUint(newBaseAssetPrice, 256)
             .endCell();
         const jettonTransfer: JettonTransfer = {
             $$type: 'JettonTransfer',
             query_id: 0n,
-            amount: 1000000n,
+            amount: toBigInt(quoteAssetTransferred),
             destination: oracle.address,
             response_destination: timekeeper.address,
             custom_payload: null,
-            forward_ton_amount: toNano('5'),
+            forward_ton_amount: toBigInt(forwardTonAmount),
             forward_payload: beginCell().storeRef(forwardInfo).endCell(),
         };
 
@@ -379,11 +385,13 @@ describe('Oracle', () => {
         let side = 0;
         //const windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, transferValue);
         let op = 1; // 1 means wind
+        let newBaseAssetPrice = 4;
         const forwardInfo: Cell = beginCell()
             .storeUint(op, 8)
             .storeUint(alarmIndex, 256)
             .storeUint(buyNum, 32)
-            .storeUint(side, 32)
+            .storeUint(side, 1)
+            .storeUint(newBaseAssetPrice, 256)
             .endCell();
         const jettonTransfer: JettonTransfer = {
             $$type: 'JettonTransfer',
@@ -530,7 +538,9 @@ describe('Oracle', () => {
         let wrongAlarmIndex = 10;
         let buyNum = 1;
         let side = 0;
-        let windResult = await windInJettonTransfer(timekeeper, oracle, wrongAlarmIndex, buyNum, side, tonToTransfer);
+        let newBaseAssetPrice = 4;
+        let quoteAssetToTransfer = 20;
+        let windResult = await windInJettonTransfer(timekeeper, oracle, wrongAlarmIndex, buyNum, side,newBaseAssetPrice, quoteAssetToTransfer, tonToTransfer);
 
         // Fail because alarmIndex is incorrect
         expect(windResult.transactions).toHaveTransaction({
@@ -669,7 +679,10 @@ describe('Oracle', () => {
         let alarmIndex = 0;
         let buyNum = 1;
         let side = 0;
-        let windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, tonToTransfer);
+        let newBaseAssetPrice = 4;
+        let quoteAssetToTransfer = 20;
+        
+        let windResult = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, newBaseAssetPrice, quoteAssetToTransfer, tonToTransfer);
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
         alarmIndexAfter = await oracle.getTotalAmount();
         expect(alarmIndexAfter).toEqual(2n);
@@ -683,7 +696,9 @@ describe('Oracle', () => {
         let buyNum2 = 1;
         let side2 = 0;
         let latestPrice = await oracle.getGetLatestBaseAssetPrice();
-        let windResult2 = await windInJettonTransfer(timekeeper, oracle, alarmIndex2, buyNum2, side2, tonToTransfer);
+        let newBaseAssetPrice2 = 4;
+        let quoteAssetToTransfer2 = 20;
+        let windResult2 = await windInJettonTransfer(timekeeper, oracle, alarmIndex2, buyNum2, side2, newBaseAssetPrice2, quoteAssetToTransfer2, tonToTransfer);
         latestPrice = await oracle.getGetLatestBaseAssetPrice();
         // Not Finished, cause for now the alarm contract that timekeeper2 build doesn't have baseprice
     });
