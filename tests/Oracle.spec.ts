@@ -11,6 +11,7 @@ import '@ton-community/test-utils';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
+const GAS_FEE = toNano('1');
 
 const toUSDT = (amount: number | string | Decimal) => toToken(amount, QUOTEASSET_DECIMALS);
 const toTON = (amount: number | string | Decimal) => toToken(amount, BASEASSET_DECIMALS);
@@ -64,11 +65,12 @@ describe('Oracle', () => {
         quoteAssetPerBaseAsset: number,
         quoteAssetToTransfer: number,
         expireAt: number,
-        tonToTransfer: number
+        tonToTransfer: number,
+        extraFees: number = 1
     ) {
         const baseAssetPrice = float(toUSDT(quoteAssetPerBaseAsset));
         const quoteAssetTransferred = toUSDT(quoteAssetToTransfer);
-        const forwardTonAmount = toTON(float(quoteAssetTransferred).div(baseAssetPrice)).add(toTON(0.055));
+        const forwardTonAmount = toTON(float(quoteAssetTransferred).div(baseAssetPrice)).add(toTON(extraFees));
 
         const forwardInfo: Cell = beginCell()
             .storeUint(0, 8)
@@ -94,7 +96,7 @@ describe('Oracle', () => {
 
         const transferResult = await watchmakerJettonContract.send(
             watchmaker.getSender(),
-            { value: toNano(tonToTransfer) },
+            { value: toBigInt(forwardTonAmount) + GAS_FEE },
             jettonTransfer
         );
         //printTransactionFees(transfterResult.transactions);
@@ -168,18 +170,19 @@ describe('Oracle', () => {
         side: number,
         newBaseAssetPrice: number,
         quoteAssetToTransfer: number,
-        transferValue: number
+        transferValue: number,
+        extraFees: number = 1
     ) {
         let op = 1; // 1 means wind
         const baseAssetPrice = float(toUSDT(newBaseAssetPrice));
         const quoteAssetTransferred = toUSDT(quoteAssetToTransfer);
-        const forwardTonAmount = toTON(float(quoteAssetTransferred).div(baseAssetPrice)).add(toTON(0.055));
+        const forwardTonAmount = toTON(float(quoteAssetTransferred).div(baseAssetPrice)).add(toTON(extraFees));
         const forwardInfo: Cell = beginCell()
             .storeUint(op, 8)
             .storeUint(alarmIndex, 256)
             .storeUint(buyNum, 32)
             .storeUint(side, 1)
-            .storeUint(newBaseAssetPrice, 256)
+            .storeUint(baseAssetPrice.toNumber(), 256)
             .endCell();
         const jettonTransfer: JettonTransfer = {
             $$type: 'JettonTransfer',
@@ -188,7 +191,7 @@ describe('Oracle', () => {
             destination: oracle.address,
             response_destination: timekeeper.address,
             custom_payload: null,
-            forward_ton_amount: toBigInt(forwardTonAmount),
+            forward_ton_amount: toBigInt(forwardTonAmount) + GAS_FEE,
             forward_payload: beginCell().storeRef(forwardInfo).endCell(),
         };
 
@@ -664,6 +667,8 @@ describe('Oracle', () => {
         const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
         await mintToken(jettonMaster, timekeeper);
 
+        blockchain.now = Math.floor(Date.now() / 1000);
+
         let alarmIndex = 0;
         let buyNum = 1;
         let side = 0;
@@ -695,7 +700,7 @@ describe('Oracle', () => {
         let timekeeper2: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper2');
         await mintToken(jettonMaster, timekeeper2);
 
-        blockchain.now = Math.floor(Date.now() / 1000) + 61; // Wating for 61 seconds to pass the verification period
+        blockchain.now = Math.floor(Date.now() / 1000) + 70; // Wating for 70 seconds to pass the verification period
 
         let alarmIndex2 = 1;
         let buyNum2 = 1;
@@ -709,14 +714,14 @@ describe('Oracle', () => {
             buyNum2,
             side2,
             newBaseAssetPrice2,
-            quoteAssetToTransfer2,
+            quoteAssetToTransfer2 + newBaseAssetPrice * buyNum2,
             tonToTransfer
         );
         let timekeeperWalletAddress2 = await jettonMaster.getGetWalletAddress(timekeeper2.address);
 
         // Check that after timekeeper wind and he didn't buy all assets, the LatestBaseAssetPrice will be update to the price that miner set
         let latestPrice = await oracle.getGetLatestBaseAssetPrice();
-        expect(latestPrice).toEqual(BigInt(newBaseAssetPrice));
+        expect(Number(latestPrice) / 2 ** 64).toBeCloseTo(toUSDT(newBaseAssetPrice).toNumber(), 5);
 
         // Check that timekeeper send JettonTransfer msg to her jetton wallet
         expect(windResult2.transactions).toHaveTransaction({
@@ -766,7 +771,7 @@ describe('Oracle', () => {
         let alarmAddress2 = await oracle.getGetAlarmAddress(2n);
         let alarm2 = blockchain.openContract(Alarm.fromAddress(alarmAddress2));
         let alarmNewPrice = await alarm2.getGetBaseAssetPrice();
-        expect(alarmNewPrice).toEqual(BigInt(newBaseAssetPrice2));
+        expect(Number(alarmNewPrice) / 2 ** 64).toBeCloseTo(toUSDT(newBaseAssetPrice2).toNumber(), 5);
 
         // Check that return the remaining funds back to the Timekeeper2
         expect(windResult2.transactions).toHaveTransaction({
@@ -988,7 +993,7 @@ describe('Oracle', () => {
         });
         // printTransactionFees(ringResult.transactions);
         let remainScale = await alarmContract.getGetRemainScale().catch((err) => {
-            console.log(err);
+            expect(err.message).toEqual('Trying to run get method on non-active contract');
         });
     });
 
@@ -1000,8 +1005,8 @@ describe('Oracle', () => {
         const mintyResult = await mintToken(jettonMaster, watchmaker);
 
         // watchmaker post price to oracle
-        const baseAssetPriceAmount = 3; // 1 ton = 3usdt
-        const baseAssetAmount = 10; // 10usdt
+        const baseAssetPriceAmount = 4; // 1 ton = 4usdt
+        const quoteAssetAmount = 10; // 10usdt
 
         const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
@@ -1010,7 +1015,7 @@ describe('Oracle', () => {
             watchmaker,
             oracle,
             baseAssetPriceAmount,
-            baseAssetAmount,
+            quoteAssetAmount,
             expireAt,
             tonToTransfer
         );
@@ -1037,6 +1042,8 @@ describe('Oracle', () => {
             remainScale: 1n,
             remainBaseAssetScale: 1n,
             remainQuoteAssetScale: 1n,
+            baseAssetAmount: toBigInt(toUSDT(2.5)),
+            quoteAssetAmount: BigInt(quoteAssetAmount),
         };
         let chronoshiftResult = await oracle.send(
             timekeeper.getSender(),

@@ -83,6 +83,8 @@ message Chronoshift {
     remainScale: Int;
     remainBaseAssetScale: Int;
     remainQuoteAssetScale: Int;
+    baseAssetAmount: Int;
+    quoteAssetAmount: Int;
 }
 message Chime {
     alarmIndex: Int;
@@ -126,6 +128,8 @@ contract Alarm with Initializable {
     quoteAssetScale: Int = 0;
     remainScale: Int = 0;
     baseAssetPrice: Int = 0;
+    baseAssetAmount: Int = 0;
+    quoteAssetAmount: Int = 0;
     init(index: Int, oracle: Address){
         self.index = index;
         self.oracleAddress = oracle;
@@ -156,10 +160,12 @@ contract Alarm with Initializable {
         self.createdAt = now();
         self.oracleAddress = sender;
         self.watchmaker = msg.watchmaker;
-        self.baseAssetScale = msg.scale; // 1
-        self.quoteAssetScale = msg.scale; // 1
-        self.remainScale = msg.scale; // 1
-        self.baseAssetPrice = msg.baseAssetPrice; // 3
+        self.baseAssetScale = msg.scale;
+        self.quoteAssetScale = msg.scale;
+        self.remainScale = msg.scale;
+        self.baseAssetPrice = msg.baseAssetPrice;
+        self.baseAssetAmount = msg.scale * MIN_BASEASSET_TRESHOLD;
+        self.quoteAssetAmount = int(msg.scale * MIN_BASEASSET_TRESHOLD * msg.baseAssetPrice);
 
         // Return the remaining funds back to the Watchmaker
         send(SendParameters{
@@ -222,11 +228,12 @@ contract Alarm with Initializable {
             }
         }
         // Check base asset and quote asset is sufficient
-        refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
+        refundQuoteAssetAmount = msg.quoteAssetAmount - int(needQuoteAssetAmount);
+
         if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
+        } else if (self.remainScale > 0) {
             // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
             baseAssetPrice = self.baseAssetPrice;
         }
@@ -265,7 +272,9 @@ contract Alarm with Initializable {
                     baseAssetPrice: self.baseAssetPrice,
                     remainScale: self.remainScale,
                     remainBaseAssetScale: self.baseAssetScale,
-                    remainQuoteAssetScale: self.quoteAssetScale
+                    remainQuoteAssetScale: self.quoteAssetScale,
+                    baseAssetAmount: self.baseAssetAmount,
+                    quoteAssetAmount: self.quoteAssetAmount
                 }.toCell()
             }
         );
@@ -476,7 +485,7 @@ contract OracleV0 with Deployable, Initializable {
         self.totalAlarms = (self.totalAlarms + 1); // MODIFIED: Miss to add totalAlarms
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
-        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee()); 
+        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
         // if (msg.refundBaseAssetAmount > 0) {
         //     standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
         // }
@@ -484,7 +493,7 @@ contract OracleV0 with Deployable, Initializable {
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: 0, // MODIFIED: from msg.refundBaseAssetAmount to 0. 
+                    value: 0, // MODIFIED: from msg.refundBaseAssetAmount to 0.
                     mode: SendRemainingValue,
                     body: JettonTransfer{
                         query_id: 0,
@@ -560,7 +569,7 @@ contract OracleV0 with Deployable, Initializable {
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
-                        amount: int(msg.baseAssetPrice.mul(msg.remainQuoteAssetScale) * QUOTEASSET_DECIMALS),
+                        amount: msg.quoteAssetAmount,
                         destination: msg.watchmaker,
                         response_destination: msg.watchmaker,
                         custom_payload: null,
@@ -588,11 +597,9 @@ contract OracleV0 with Deployable, Initializable {
         // Actual formula:
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
-
-        if (now() <= (timestamp + TIMEPACE)){
+        if (now() <= (timestamp + TIMEPACE)) {
             return ;
         }
-
         if (timestamp <= self.latestTimestamp || baseAssetPrice == 0) {
             // Ignore the old timestamp
             return ;
@@ -602,7 +609,6 @@ contract OracleV0 with Deployable, Initializable {
             self.latestBaseAssetPrice = baseAssetPrice;
             return ;
         }
-        
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
     }
 
