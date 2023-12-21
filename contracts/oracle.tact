@@ -201,10 +201,10 @@ contract Alarm with Initializable {
             } else {
                 // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
                 // need ton amount = (buy amount * 2) - the amount you buy from this alarm
-                needQuoteAssetAmount =
-                    (msg.newBaseAssetPrice.mul(msg.buyNum << 1) +
+                needQuoteAssetAmount = int((msg.newBaseAssetPrice.mul(msg.buyNum << 1) +
                         self.baseAssetPrice.mul(msg.buyNum)) *
-                        QUOTEASSET_DECIMALS;
+                        QUOTEASSET_DECIMALS
+                );
                 needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
                 self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
@@ -216,10 +216,10 @@ contract Alarm with Initializable {
             if (self.quoteAssetScale < msg.buyNum) {
                 failed = true;
             } else {
-                needQuoteAssetAmount =
-                    (msg.newBaseAssetPrice.mul(msg.buyNum << 1) -
+                needQuoteAssetAmount = int((msg.newBaseAssetPrice.mul(msg.buyNum << 1) -
                         self.baseAssetPrice.mul(msg.buyNum)) *
-                        QUOTEASSET_DECIMALS;
+                        QUOTEASSET_DECIMALS
+                );
                 needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
                 self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
@@ -228,14 +228,22 @@ contract Alarm with Initializable {
             }
         }
         // Check base asset and quote asset is sufficient
-        refundQuoteAssetAmount = msg.quoteAssetAmount - int(needQuoteAssetAmount);
-
+        refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
         if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } else if (self.remainScale > 0) {
-            // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
-            baseAssetPrice = self.baseAssetPrice;
+        } else {
+            if (msg.side == 1) {
+                self.quoteAssetAmount =
+                    (self.quoteAssetAmount - int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
+            } else {
+                self.quoteAssetAmount =
+                    (self.quoteAssetAmount + int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
+            }
+            if (self.remainScale > 0) {
+                // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
+                baseAssetPrice = self.baseAssetPrice;
+            }
         }
         send(SendParameters{
                 to: ctx.sender,
@@ -401,6 +409,7 @@ contract OracleV0 with Deployable, Initializable {
             let sendBackAmount: Int = ((ctx.value - needBaseAssetAmount) - 2 * (ctx.readForwardFee() + STORAGE_FEE));
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
+
             send(SendParameters{
                     to: contractAddress(initCode),
                     value: sendBackAmount,

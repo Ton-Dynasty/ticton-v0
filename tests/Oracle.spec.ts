@@ -68,7 +68,7 @@ describe('Oracle', () => {
         tonToTransfer: number,
         extraFees: number = 1
     ) {
-        const baseAssetPrice = float(toUSDT(quoteAssetPerBaseAsset));
+        const baseAssetPrice = float(toUSDT(quoteAssetPerBaseAsset).div(toTON(1)));
         const quoteAssetTransferred = toUSDT(quoteAssetToTransfer);
         const forwardTonAmount = toTON(float(quoteAssetTransferred).div(baseAssetPrice)).add(toTON(extraFees));
 
@@ -1275,19 +1275,12 @@ describe('Oracle', () => {
 
         // watchmaker post price to oracle
         const baseAssetPriceAmount = 3; // 1 ton = 3usdt
-        const baseAssetAmount = 10; // 10usdt
+        const quoteAssetAmount = 10; // 10usdt
 
         const expireAt = blockchain.now!! + 1000;
         const tonToTransfer = 10;
 
-        const transfterResult = await tickInJettonTransfer(
-            watchmaker,
-            oracle,
-            baseAssetPriceAmount,
-            baseAssetAmount,
-            expireAt,
-            tonToTransfer
-        );
+        await tickInJettonTransfer(watchmaker, oracle, baseAssetPriceAmount, quoteAssetAmount, expireAt, tonToTransfer);
 
         // Check that alarm count is 1
         let alarmIndexAfter = await oracle.getTotalAmount();
@@ -1330,12 +1323,15 @@ describe('Oracle', () => {
 
         // Check that watchmaker's jetton wallet get the remaining funds
         let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+        const oracleJettonWallet = await blockchain.openContract(ExampleJettonWallet.fromAddress(oracleWalletAddress));
+        const oracleBalance = (await oracleJettonWallet.getGetWalletData()).balance;
+
         expect(ringResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: oracleWalletAddress,
             success: true,
         });
 
-        expect(balanceAfter).toEqual(balanceBefore + BigInt(baseAssetAmount * 10 ** 6));
+        expect(balanceAfter).toEqual(balanceBefore + BigInt(quoteAssetAmount * 10 ** 6));
     });
 });
