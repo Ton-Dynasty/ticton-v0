@@ -43,13 +43,15 @@ message Tock {
 message Wind {
     alarmIndex: Int as uint256; // the interacted alarm index
     buyNum: Int as uint32; // how many scale to buy
-    side: Int as uint8; // 0 for baseAsset, 1 for quoteAsset
+    side: Bool; // 0 for baseAsset, 1 for quoteAsset
+    newBaseAssetPrice: Int as uint256; // new baseAsset price relative to quoteAsset in fixed point float
 }
 message Reset {
     sender: Address;
     buyNum: Int; // The number of scales to buy
     side: Int; // 0 for baseAsset, 1 for quoteAsset
     quoteAssetAmount: Int; // The amount of quoteAsset oracle received
+    newBaseAssetPrice: Int; // The new baseAsset price relative to quoteAsset
 }
 message Sync {
     baseAssetPrice: Int as uint256; // quoteAsset amount to buy 1 baseAsset
@@ -85,12 +87,12 @@ message Chronoshift {
 message Chime {
     alarmIndex: Int;
     timeKeeper: Address;
-    createdAt: Int;
-    baseAssetPrice: Int as uint256;
-    remainScale: Int;
+    newBaseAssetPrice: Int as uint256;
     newScale: Int;
-    refundBaseAssetAmount: Int;
     refundQuoteAssetAmount: Int;
+    baseAssetPrice: Int as uint256;
+    createdAt: Int;
+    remainScale: Int;
 }
 message(0x7362d09c) JettonTransferNotification {
     query_id: Int as uint64; // arbitrary request number
@@ -184,45 +186,63 @@ contract Alarm with Initializable {
         let refundBaseAssetAmount: Int = 0; // 0 means return as much as possible
         let refundQuoteAssetAmount: Int = 0;
         let baseAssetPrice: Int = 0;
+        let needBaseAssetAmount: Int = 0;
+        let needQuoteAssetAmount: Int = 0;
         if (msg.side == 0) {
+            // Buy baseAsset
             if (self.baseAssetScale < msg.buyNum) {
                 failed = true;
             } else {
+                // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
+                // need ton amount = (buy amount * 2) - the amount you buy from this alarm
+                needQuoteAssetAmount =
+                    (msg.newBaseAssetPrice.mul(msg.buyNum << 1) +
+                        self.baseAssetPrice.mul(msg.buyNum)) *
+                        QUOTEASSET_DECIMALS;
+                needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
-                self.baseAssetScale = (self.baseAssetScale - msg.buyNum); // TODO: Check overflow
+                self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
                 self.quoteAssetScale = (self.quoteAssetScale + msg.buyNum);
-                self.remainScale = (self.remainScale - msg.buyNum); // TODO: Check overflow
+                self.remainScale = (self.remainScale - msg.buyNum);
             }
         } else {
+            // Buy quoteAsset, put baseAsset into the alarm
             if (self.quoteAssetScale < msg.buyNum) {
                 failed = true;
             } else {
+                needQuoteAssetAmount =
+                    (msg.newBaseAssetPrice.mul(msg.buyNum << 1) -
+                        self.baseAssetPrice.mul(msg.buyNum)) *
+                        QUOTEASSET_DECIMALS;
+                needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
-                self.baseAssetScale = (self.baseAssetScale + msg.buyNum); // TODO: Check overflow
+                self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
                 self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
-                self.remainScale = (self.remainScale - msg.buyNum); // TODO: Check overflow
+                self.remainScale = (self.remainScale - msg.buyNum);
             }
         }
-        if (failed) {
+        // Check base asset and quote asset is sufficient
+        refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
+        if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
-        } else if (self.remainScale > 0) {
-            // send Chime message to the Oracle to update the price
+        } else if (self.remainScale > 0 && now() > (self.createdAt + TIMEPACE)) {
+            // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
             baseAssetPrice = self.baseAssetPrice;
         }
         send(SendParameters{
                 to: ctx.sender,
-                value:  (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
-                mode: SendPayGasSeparately,
+                value: (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
+                mode: SendIgnoreErrors,
                 body: Chime{
                     alarmIndex: self.index,
                     timeKeeper: msg.sender,
-                    baseAssetPrice: baseAssetPrice,
-                    createdAt: self.createdAt,
-                    remainScale: self.remainScale,
+                    newBaseAssetPrice: msg.newBaseAssetPrice, // Change to the new baseAssetPrice
                     newScale: msg.buyNum << 1,
                     refundQuoteAssetAmount: refundQuoteAssetAmount,
-                    refundBaseAssetAmount: refundBaseAssetAmount
+                    baseAssetPrice: baseAssetPrice,
+                    createdAt: self.createdAt,
+                    remainScale: self.remainScale
                 }.toCell()
             }
         );
@@ -395,6 +415,7 @@ contract OracleV0 with Deployable, Initializable {
             let alarmIndex: Int = sc.loadUint(256);
             let buyNum: Int = sc.loadUint(32);
             let side: Int = sc.loadUint(1);
+            let newBaseAssetPrice: Int = sc.loadUint(256);
             // Don't we need to add new baseprice? right now the alarm that timekeep build its baseprice is 0
             require(alarmIndex < self.totalAlarms, "alarmIndex out of range");
             require(side == 0 || side == 1, "side must be either 0 or 1");
@@ -402,7 +423,13 @@ contract OracleV0 with Deployable, Initializable {
                     to: contractAddress(self._calculateAlarmInit(alarmIndex)),
                     value: (ctx.value - STORAGE_FEE),
                     mode: 0,
-                    body: Reset{sender: msg.sender, buyNum: buyNum, side: side, quoteAssetAmount: msg.amount}.toCell() // MODIFIED: sender is msg.sender, not ctx.sender
+                    body: Reset{
+                        sender: msg.sender,
+                        buyNum: buyNum,
+                        side: side,
+                        quoteAssetAmount: msg.amount,
+                        newBaseAssetPrice: newBaseAssetPrice
+                    }.toCell()
                 }
             );
             return ;
@@ -434,13 +461,13 @@ contract OracleV0 with Deployable, Initializable {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: ton("0.05"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
+                value: ton("0.04"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
                     scale: msg.newScale,
                     watchmaker: msg.timeKeeper,
-                    baseAssetPrice: msg.baseAssetPrice
+                    baseAssetPrice: msg.newBaseAssetPrice
                 }.toCell(),
                 code: initCode.code,
                 data: initCode.data
@@ -449,11 +476,15 @@ contract OracleV0 with Deployable, Initializable {
         self.totalAlarms = (self.totalAlarms + 1); // MODIFIED: Miss to add totalAlarms
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
+        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee()); 
+        // if (msg.refundBaseAssetAmount > 0) {
+        //     standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
+        // }
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: msg.refundBaseAssetAmount,
+                    value: 0, // MODIFIED: from msg.refundBaseAssetAmount to 0. 
                     mode: SendRemainingValue,
                     body: JettonTransfer{
                         query_id: 0,
@@ -468,13 +499,8 @@ contract OracleV0 with Deployable, Initializable {
             );
             return ;
         }
-        if (msg.refundBaseAssetAmount > 0) {
-            send(SendParameters{
-                    to: msg.timeKeeper,
-                    value: msg.refundBaseAssetAmount,
-                    mode: 0,
-                    body: "SlickBack".asComment()
-                }
+        if (standardRefundAmount > 0) {
+            send(SendParameters{to: msg.timeKeeper, value: standardRefundAmount, mode: 0, body: "SlickBack".asComment()}
             );
             return ;
         }
@@ -562,10 +588,13 @@ contract OracleV0 with Deployable, Initializable {
         // Actual formula:
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
+
         if (now() <= (timestamp + TIMEPACE)){
             return ;
         }
-        if (timestamp <= self.latestTimestamp) {
+
+        if (timestamp <= self.latestTimestamp || baseAssetPrice == 0) {
+            // Ignore the old timestamp
             return ;
         }
         if (self.latestTimestamp == 0) {
@@ -573,6 +602,7 @@ contract OracleV0 with Deployable, Initializable {
             self.latestBaseAssetPrice = baseAssetPrice;
             return ;
         }
+        
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
     }
 
