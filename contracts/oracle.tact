@@ -398,8 +398,14 @@ contract OracleV0 with Deployable, Initializable {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = msg.amount.float().muldiv(BASEASSET_DECIMALS, baseAssetPrice);
-            require(needBaseAssetAmount > MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
+            // dump("baseAssetPrice");
+            // dump(baseAssetPrice);
+            // dump("msg.amount.float()");
+            // dump(msg.amount.float());
+            let needBaseAssetAmount: Int = int(msg.amount.float().div(baseAssetPrice));
+            //dump(needBaseAssetAmount);
+            require(needBaseAssetAmount*MIN_BASEASSET_TRESHOLD >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
+            //dump(ctx.value);
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
             );
