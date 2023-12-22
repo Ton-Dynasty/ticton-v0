@@ -589,7 +589,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: msg.remainBaseAssetScale * BASEASSET_DECIMALS + msg.extraBaseAssetAmount,
+                    value: (msg.remainBaseAssetScale * BASEASSET_DECIMALS + msg.extraBaseAssetAmount),
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
@@ -606,7 +606,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             //  Refund TON
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD,
+                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + msg.extraBaseAssetAmount),
                     mode: SendPayGasSeparately,
                     body: "SlickBack".asComment()
                 }
