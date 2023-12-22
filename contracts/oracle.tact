@@ -1,6 +1,7 @@
 import "@stdlib/deploy";
-import "./library.tact";
 import "./packages/math/float.fc";
+import "./packages/token/jetton/JettonMaster.tact";
+import "./packages/token/jetton/JettonWallet.tact";
 
 @name(toFloat)
 native float(value: Int): Int;
@@ -29,6 +30,7 @@ extends native muldiv(self: Int, numerator: Int, denominator: Int): Int;
 message Initialize {
     baseAssetWallet: Address; // e.g. jetton wallet address for TON, which is 0
     quoteAssetWallet: Address; // e.g. jetton wallet address for USDT
+    rewardJettonContent: Cell; // reward token jetton content
 }
 message Tick {
     expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
@@ -96,21 +98,6 @@ message Chime {
     createdAt: Int;
     remainScale: Int;
 }
-message(0x7362d09c) JettonTransferNotification {
-    query_id: Int as uint64; // arbitrary request number
-    amount: Int as coins; // amount of jettons to transfer
-    sender: Address; // address of the sender of the jettons
-    forward_payload: Slice as remaining; // optional custom payload
-}
-message(0x0f8a7ea5) JettonTransfer {
-    query_id: Int as uint64; // arbitrary request number
-    amount: Int as coins; // amount of jettons to transfer
-    destination: Address; // address of the new owner of the jettons
-    response_destination: Address; // address where to send a response with confirmation of a successful transfer and the rest of the incoming message Toncoins.
-    custom_payload: Cell?; // optional custom payload
-    forward_ton_amount: Int as coins; // the amount of nanotons to be sent to the destination address.
-    forward_payload: Slice as remaining; // optional custom data that should be sent to the destination address.
-}
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 100000;
 const DEPLOY_FEE: Int = ton("0.1");
@@ -118,6 +105,26 @@ const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
 const TIMEPACE: Int = 60; // 1 minutes
+
+trait Initializable {
+    abstract inline fun requireInitialized();
+
+    abstract inline fun requireNotInitialized();
+}
+
+contract RewardJettonWallet with JettonWallet {
+    balance: Int as coins = 0;
+    owner: Address;
+    jetton_master: Address;
+    init(owner: Address, jetton_master: Address){
+        self.owner = owner;
+        self.jetton_master = jetton_master;
+    }
+
+    override inline fun calculate_jetton_wallet_init(owner_address: Address): StateInit {
+        return initOf RewardJettonWallet(owner_address, self.jetton_master);
+    }
+}
 
 contract Alarm with Initializable {
     index: Int = 0;
@@ -166,7 +173,6 @@ contract Alarm with Initializable {
         self.baseAssetPrice = msg.baseAssetPrice;
         self.baseAssetAmount = msg.scale * MIN_BASEASSET_TRESHOLD;
         self.quoteAssetAmount = int(msg.scale * MIN_BASEASSET_TRESHOLD * msg.baseAssetPrice);
-
         // Return the remaining funds back to the Watchmaker
         send(SendParameters{
                 to: self.watchmaker,
@@ -310,9 +316,9 @@ contract Alarm with Initializable {
     }
 }
 
-contract OracleV0 with Deployable, Initializable {
+contract OracleV0 with Deployable, Initializable, JettonMaster {
     // deploy
-    manager: Address;
+    owner: Address;
     // initialize
     baseAsset: Address; // ton
     quoteAsset: Address; // usdt
@@ -323,13 +329,18 @@ contract OracleV0 with Deployable, Initializable {
     totalAlarms: Int = 0;
     latestBaseAssetPrice: Int = 0; // latest price of baseAsset
     latestTimestamp: Int = 0;
+    // reward jetton configuration
+    total_supply: Int as coins = 0;
+    mintable: Bool = true;
+    jetton_content: Cell;
     init(baseAsset: Address, quoteAsset: Address){
-        self.manager = sender();
+        self.owner = sender();
         self.is_initialized = false;
         self.baseAsset = baseAsset;
         self.quoteAsset = quoteAsset;
         self.baseAssetWallet = newAddress(0, 0);
         self.quoteAssetWallet = newAddress(0, 0);
+        self.jetton_content = emptyCell();
     }
 
     inline fun requireAlarm(index: Int) {
@@ -344,14 +355,19 @@ contract OracleV0 with Deployable, Initializable {
         require(self.is_initialized == false, "Already initialized");
     }
 
+    override inline fun calculate_jetton_wallet_init(owner_address: Address): StateInit {
+        return initOf RewardJettonWallet(owner_address, myAddress());
+    }
+
     receive(msg: Initialize){
         require(self.is_initialized == false, "Already initialized");
-        require(sender() == self.manager, "Only manager can initialize"); //Can not pass, cause manager is not set yet
+        require(sender() == self.owner, "Only owner can initialize");
         require(msg.baseAssetWallet == newAddress(0, 0), "Only support TON as baseAsset");
-        self.manager = sender();
+        self.owner = sender();
         self.is_initialized = true;
         self.baseAssetWallet = msg.baseAssetWallet;
         self.quoteAssetWallet = msg.quoteAssetWallet;
+        self.jetton_content = msg.rewardJettonContent;
     }
 
     receive(msg: JettonTransferNotification){
@@ -374,10 +390,6 @@ contract OracleV0 with Deployable, Initializable {
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
             if (currentTimestamp > expireAt && value > 0) {
                 // Return jetton back if gas is enough
-                if (self.baseAssetWallet != newAddress(0, 0)) {
-                    // TODO: if base asset is not TON, return the base asset back to the Watchmaker
-                    dump("Not implemented yet");
-                }
                 if (self.quoteAssetWallet != newAddress(0, 0)) {
                     send(SendParameters{
                             to: self.quoteAssetWallet,
@@ -398,14 +410,10 @@ contract OracleV0 with Deployable, Initializable {
                 return ;
             }
             // Preserve the baseAssetAmount
-            // dump("baseAssetPrice");
-            // dump(baseAssetPrice);
-            // dump("msg.amount.float()");
-            // dump(msg.amount.float());
             let needBaseAssetAmount: Int = int(msg.amount.float().div(baseAssetPrice));
-            //dump(needBaseAssetAmount);
-            require(needBaseAssetAmount*MIN_BASEASSET_TRESHOLD >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
-            //dump(ctx.value);
+            require(needBaseAssetAmount * MIN_BASEASSET_TRESHOLD >= MIN_BASEASSET_TRESHOLD,
+                "baseAssetAmount is too small"
+            );
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
             );
@@ -415,7 +423,6 @@ contract OracleV0 with Deployable, Initializable {
             let sendBackAmount: Int = ((ctx.value - needBaseAssetAmount) - 2 * (ctx.readForwardFee() + STORAGE_FEE));
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
-
             send(SendParameters{
                     to: contractAddress(initCode),
                     value: sendBackAmount,
@@ -572,8 +579,9 @@ contract OracleV0 with Deployable, Initializable {
     receive(msg: Chronoshift){
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
+        let rewardAmount: Int = 0;
         if (msg.remainScale > 0) {
-            self.sync(msg.createdAt, msg.baseAssetPrice);
+            rewardAmount = self.sync(msg.createdAt, msg.baseAssetPrice);
         }
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
@@ -593,7 +601,6 @@ contract OracleV0 with Deployable, Initializable {
                     }.toCell()
                 }
             );
-            return ;
         } else if (msg.remainBaseAssetScale > 0) {
             //  Refund TON
             send(SendParameters{
@@ -604,27 +611,49 @@ contract OracleV0 with Deployable, Initializable {
                 }
             );
         }
+        // TODO: Uncomment this after the reward token is ready
+        // if (rewardAmount > 0) {
+        //     send(SendParameters{
+        //             to: myAddress(),
+        //             value: 0,
+        //             body: JettonMint{
+        //                 origin: myAddress(),
+        //                 receiver: msg.watchmaker,
+        //                 amount: rewardAmount,
+        //                 custom_payload: null,
+        //                 forward_ton_amount: 0,
+        //                 forward_payload: emptySlice()
+        //             }.toCell()
+        //         }
+        //     );
+        // }
     }
 
-    inline fun sync(timestamp: Int, baseAssetPrice: Int) {
+    // Sync the price and return the reward
+    inline fun sync(timestamp: Int, baseAssetPrice: Int): Int {
         // TODO: Calculate the weighted average of the baseAssetPrice
         // For testing purpose, we just use (9*old + new) / 10
         // Actual formula:
         // d = (new timestamp - old timestamp) / TIMEPACE
         // w = 0.9 * {1 - [1 / (1 - d^2)]^2}
         if (now() <= (timestamp + TIMEPACE)) {
-            return ;
+            return 0;
         }
         if (timestamp <= self.latestTimestamp || baseAssetPrice == 0) {
             // Ignore the old timestamp
-            return ;
+            return 0;
         }
         if (self.latestTimestamp == 0) {
             self.latestTimestamp = timestamp;
             self.latestBaseAssetPrice = baseAssetPrice;
-            return ;
+            return TIMEPACE;
         }
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
+        let reward: Int = (timestamp - self.latestTimestamp) / TIMEPACE;
+        if (reward > 0) {
+            return reward;
+        }
+        return 0;
     }
 
     inline fun _calculateAlarmInit(index: Int): StateInit {
