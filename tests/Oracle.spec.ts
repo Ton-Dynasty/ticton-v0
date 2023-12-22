@@ -26,10 +26,6 @@ describe('Oracle', () => {
     let zero_address: Address = new Address(0, Buffer.alloc(32));
     async function initializeOracle(oracle: SandboxContract<OracleV0>, owner: SandboxContract<TreasuryContract>) {
         const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
-        const oracleJettonContract = blockchain.openContract(
-            await ExampleJettonWallet.fromAddress(oracleWalletAddress)
-        );
-
         const initResult = await oracle.send(
             owner.getSender(),
             { value: toNano('0.05') },
@@ -39,7 +35,6 @@ describe('Oracle', () => {
                 quoteAssetWallet: oracleWalletAddress,
             }
         );
-
         return initResult;
     }
 
@@ -54,10 +49,10 @@ describe('Oracle', () => {
      *
      * @param watchmaker The caller of this function to trigger the tick msg
      * @param oracle The oracle contract
-     * @param quoteAssetPerBaseAsset  The price of quoteAsset per baseAsset, e.g. 1 ton = 4 usdt, then rawQuoteAssetPerBaseAsset = 4
      * @param quoteAssetToTransfer The amount of quoteAsset to transfer, e.g. then rawQuoteAssetAmount = 10 for 10 usdt
+     * @param baseAssetToTransfer The amount of baseAsset to transfer, for tick msg, it's always 1 in the first time
      * @param expireAt The lifetime of this price, e.g. 1734022044
-     * @param tonToTransfer The amount of ton to transfer, should bigger than forward_ton_amount
+     * @param extraFees The extra fees to pay for the calculation in the oracle contract
      */
     async function tickInJettonTransfer(
         watchmaker: SandboxContract<TreasuryContract>,
@@ -160,6 +155,17 @@ describe('Oracle', () => {
         return transferResult;
     }
 
+    /**
+     *
+     * @param timekeeper The caller of this function to trigger the tick msg
+     * @param oracle The oracle contract
+     * @param alarmIndex The index of alarm timekeeper want to wind
+     * @param buyNum The amount of scales to buy
+     * @param side 0 for baseAsset, 1 for quoteAsset
+     * @param baseAssetToTransfer The amount of baseAsset to transfer, for tick msg, it's always 1 in the first time
+     * @param quoteAssetToTransfer The amount of quoteAsset to transfer, e.g. then rawQuoteAssetAmount = 10 for 10 usdt
+     * @param extraFees The extra fees to pay for the calculation in the oracle contract
+     */
     async function windInJettonTransfer(
         timekeeper: SandboxContract<TreasuryContract>,
         oracle: SandboxContract<OracleV0>,
@@ -326,12 +332,12 @@ describe('Oracle', () => {
     it('Should return funds if remaining ton is sufficient to pay the gas', async () => {
         // TODO: the code in oracle for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
         // Initialize oracle
-        const initResult = await initializeOracle(oracle, owner);
+        await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
-        const mintResult = await mintToken(jettonMaster, watchmaker);
+        await mintToken(jettonMaster, watchmaker);
         // watchmaker post price to oracle
         const quoteAssetToTransfer = 10; // 10usdt
-        const transfterResult = await tickInJettonTransfer(
+        await tickInJettonTransfer(
             watchmaker,
             oracle,
             quoteAssetToTransfer,
@@ -515,7 +521,7 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, watchmaker);
         // watchmaker post price to oracle
         const quoteAssetToTransfer1 = 10; // 10usdt
-        await await tickInJettonTransfer(
+        await tickInJettonTransfer(
             watchmaker,
             oracle,
             quoteAssetToTransfer1,
@@ -911,7 +917,7 @@ describe('Oracle', () => {
             success: true,
         });
         // printTransactionFees(ringResult.transactions);
-        let remainScale = await alarmContract.getGetRemainScale().catch((err) => {
+        await alarmContract.getGetRemainScale().catch((err) => {
             expect(err.message).toEqual('Trying to run get method on non-active contract');
         });
     });
@@ -1087,7 +1093,7 @@ describe('Oracle', () => {
             queryID: 0n,
             alarmIndex: alarmIndex,
         };
-        let ringResult = await oracle.send(
+        await oracle.send(
             watchmaker.getSender(),
             {
                 value: toNano('10'),
@@ -1207,10 +1213,9 @@ describe('Oracle', () => {
             to: oracleWalletAddress,
             success: true,
         });
-
-        expect(Number(balanceAfter) / 2 ** 64).toBeCloseTo(Number(balanceBefore + BigInt(quoteAssetToTransfer1 * 10 ** 6)) / 2 ** 64, 5);
         
-
+        // Make sure that token is returned to watchmaker
+        expect(Number(balanceAfter) / 2 ** 64).toBeCloseTo(Number(balanceBefore + BigInt(quoteAssetToTransfer1 * 10 ** 6)) / 2 ** 64, 5);
     });
 });
 
