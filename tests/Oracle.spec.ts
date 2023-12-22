@@ -263,12 +263,12 @@ describe('Oracle', () => {
         });
     });
 
-    it('should deploy', async () => {
+    it('Should deploy', async () => {
         // the check is done inside beforeEach
         // blockchain and oracle are ready to use
     });
 
-    it('should watchmaker sends tick msg to oracle by functions', async () => {
+    it('Tick Test: Should watchmaker sends tick msg to oracle by functions', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -291,11 +291,11 @@ describe('Oracle', () => {
         expect(alarmIndex).toEqual(1n);
     });
 
-    it('Should fail if message is not from oracle', async () => {
+    it('Tick Test: Should fail if message is not from oracle', async () => {
         // Initialize oracle
-        const initResult = await initializeOracle(oracle, owner);
+        await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
-        const mintyResult = await mintToken(jettonMaster, watchmaker);
+        await mintToken(jettonMaster, watchmaker);
         // watchmaker post price to oracle
         const quoteAssetToTransfer = 10; // 10usdt
         await tickInJettonTransfer(
@@ -329,7 +329,7 @@ describe('Oracle', () => {
         });
     });
 
-    it('Should return funds if remaining ton is sufficient to pay the gas', async () => {
+    it('Tick Test: Should return funds if remaining ton is sufficient to pay the gas', async () => {
         // TODO: the code in oracle for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
         // Initialize oracle
         await initializeOracle(oracle, owner);
@@ -345,7 +345,7 @@ describe('Oracle', () => {
         //printTransactionFees(transfterResult.transactions);
     });
 
-    it('Should timekeeper send wind msg to oracle', async () => {
+    it('Wind Test: Should timekeeper send wind msg to oracle', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -467,7 +467,7 @@ describe('Oracle', () => {
         expect(remainScale2).toEqual(2n);
     });
 
-    it('Should return funds if side or alarmIndex is incorrect', async () => {
+    it('Wind Test: Should return funds if side or alarmIndex is incorrect', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -514,7 +514,7 @@ describe('Oracle', () => {
         // Becuase its size is 1 bit, so it's no way to assign a wrong value(others value than 0 and 1) to it
     });
 
-    it('Should fail transaction if Reset message is not from Oracle', async () => {
+    it('Wind Test: Should fail transaction if Reset message is not from Oracle', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -552,7 +552,7 @@ describe('Oracle', () => {
         });
     });
 
-    it('Should fail transaction if Chime message not came from Alarm contract', async () => {
+    it('Wind Test: Should fail transaction if Chime message not came from Alarm contract', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -591,7 +591,7 @@ describe('Oracle', () => {
         });
     });
 
-    it('Should update price according to the formula in the Chime msg', async () => {
+    it('Wind Test: Should update price according to the formula in the Chime msg', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
 
