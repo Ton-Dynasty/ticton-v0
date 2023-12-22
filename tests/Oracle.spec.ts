@@ -1201,17 +1201,16 @@ describe('Oracle', () => {
 
         // Check that watchmaker's jetton wallet get the remaining funds
         let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
-        const oracleJettonWallet = await blockchain.openContract(ExampleJettonWallet.fromAddress(oracleWalletAddress));
-        const oracleBalance = (await oracleJettonWallet.getGetWalletData()).balance;
 
         expect(ringResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: oracleWalletAddress,
             success: true,
         });
-        console.log('Balace before: ', Number(balanceBefore) / 10 ** 6);
-        console.log('Balace after: ', Number(balanceAfter) / 10 ** 6);
-        //expect(Number(balanceAfter)).toEqual(Number(balanceBefore + BigInt(quoteAssetToTransfer1 * 10 ** 6)));
+
+        expect(Number(balanceAfter) / 2 ** 64).toBeCloseTo(Number(balanceBefore + BigInt(quoteAssetToTransfer1 * 10 ** 6)) / 2 ** 64, 5);
+        
+
     });
 });
 
