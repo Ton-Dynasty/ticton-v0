@@ -85,8 +85,8 @@ message Chronoshift {
     remainScale: Int;
     remainBaseAssetScale: Int;
     remainQuoteAssetScale: Int;
-    baseAssetAmount: Int;
-    quoteAssetAmount: Int;
+    extraBaseAssetAmount: Int;
+    extraQuoteAssetAmount: Int;
 }
 message Chime {
     alarmIndex: Int;
@@ -274,6 +274,7 @@ contract Alarm with Initializable {
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
+        let extraBaseAssetAmount: Int = abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
         send(SendParameters{
                 to: self.oracleAddress,
                 value: 0,
@@ -287,8 +288,8 @@ contract Alarm with Initializable {
                     remainScale: self.remainScale,
                     remainBaseAssetScale: self.baseAssetScale,
                     remainQuoteAssetScale: self.quoteAssetScale,
-                    baseAssetAmount: self.baseAssetAmount,
-                    quoteAssetAmount: self.quoteAssetAmount
+                    extraBaseAssetAmount: extraBaseAssetAmount,
+                    extraQuoteAssetAmount: self.quoteAssetAmount
                 }.toCell()
             }
         );
@@ -588,11 +589,11 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: msg.remainBaseAssetScale * BASEASSET_DECIMALS,
+                    value: msg.remainBaseAssetScale * BASEASSET_DECIMALS + msg.extraBaseAssetAmount,
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
-                        amount: msg.quoteAssetAmount,
+                        amount: msg.extraQuoteAssetAmount,
                         destination: msg.watchmaker,
                         response_destination: msg.watchmaker,
                         custom_payload: null,

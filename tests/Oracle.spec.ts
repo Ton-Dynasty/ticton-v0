@@ -907,8 +907,8 @@ describe('Oracle', () => {
             remainScale: 1n,
             remainBaseAssetScale: 1n,
             remainQuoteAssetScale: 1n,
-            baseAssetAmount: toBigInt(toUSDT(2.5)),
-            quoteAssetAmount: BigInt(quoteAssetToTransfer1),
+            extraBaseAssetAmount: toBigInt(toUSDT(2.5)),
+            extraQuoteAssetAmount: BigInt(quoteAssetToTransfer1),
         };
         let chronoshiftResult = await oracle.send(
             timekeeper.getSender(),
