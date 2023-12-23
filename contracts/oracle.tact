@@ -211,6 +211,7 @@ contract Alarm with Initializable {
                         self.baseAssetPrice.mul(msg.buyNum)) *
                         QUOTEASSET_DECIMALS
                 );
+                // WARNING: needQuoteAssetAmount is always 0 here
                 needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
                 self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
@@ -235,6 +236,7 @@ contract Alarm with Initializable {
         }
         // Check base asset and quote asset is sufficient
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
+        // WARNING: Don't check that ctx.value > needBaseAssetAmount
         if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // Return all funds back to the TimeKeeper
             refundQuoteAssetAmount = msg.quoteAssetAmount;
@@ -491,6 +493,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
         // Deploy a new alarm contract
+        // WARNING: The new alarm contract is deployed anyway, even if wind is failed
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
@@ -514,6 +517,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         //     standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
         // }
         if (msg.refundQuoteAssetAmount > 0) {
+            //dump("What up");
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
@@ -525,7 +529,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                         destination: msg.timeKeeper,
                         response_destination: msg.timeKeeper,
                         custom_payload: null,
-                        forward_ton_amount: 0,
+                        forward_ton_amount: 0, // WARNING: We should send the remaining funds in forward_ton_amount back to the TimeKeeper and not to use SendRemainingValue mode
                         forward_payload: emptySlice()
                     }.toCell()
                 }
