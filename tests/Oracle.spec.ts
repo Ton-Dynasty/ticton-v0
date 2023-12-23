@@ -873,7 +873,7 @@ describe('Oracle', () => {
             baseAssetToTransfer,
             quoteAssetToTransfer2
         );
-        printTransactionFees(windResult.transactions);
+        //printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
