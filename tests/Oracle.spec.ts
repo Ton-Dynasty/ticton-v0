@@ -94,6 +94,11 @@ describe('Oracle', () => {
             { value: toBigInt(forwardTonAmount) + GAS_FEE },
             jettonTransfer
         );
+
+        // For test: Should send Jetton back if currentTimestamp > expireAt
+        if(expireAt != blockchain.now!! + 1000 || baseAssetToTransfer != 1) {
+            return transferResult;
+        }
         //printTransactionFees(transferResult.transactions);
 
         let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
@@ -270,7 +275,7 @@ describe('Oracle', () => {
         // blockchain and oracle are ready to use
     });
 
-    it('Tick Test: Should watchmaker sends tick msg to oracle by functions', async () => {
+    it('Tick Test: Should watchmaker sends tick msg to oracle', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
         // Mint tokens to watchmaker
@@ -323,6 +328,95 @@ describe('Oracle', () => {
         });
     });
 
+    it('Tick Test: Should send Jetton back if currentTimestamp > expireAt', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const quoteAssetToTransfer = 10; // 10usdt
+        const result = await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer, 1, blockchain.now!! - 1000);
+        const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+        const watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
+        // Check that oracle send Jetton Transfer message to refund jetton to watchmaker
+        expect(result.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: oracleWalletAddress,
+            success: true,
+        });
+
+        // Check that oracle Wallet send JettonInternalTransfer msg to watchmaker's jetton wallet
+        expect(result.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: watchmakerWalletAddress,
+            success: true,
+        });
+    });
+
+    it('Tick Test: Should revert if baseAssetAmount is too small', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const quoteAssetToTransfer = 4; // expected to transfer 10 usdt
+        const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+        const baseAssetToTransfer = 0.5; // 0.5 ton
+        const result = await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer, baseAssetToTransfer);
+
+        expect(result.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: oracle.address,
+            exitCode: 62368 // baseAssetAmount is too small
+        });
+    });
+
+    it('Tick Test: Should revert if insufficient funds to pay for the gas', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+        const quoteAssetToTransfer = 4; // expected to transfer 10 usdt
+        const baseAssetToTransfer = 1; // 0.5 ton
+        const baseAssetPrice = float(toUSDT(quoteAssetToTransfer)).divToInt(toTON(baseAssetToTransfer));
+        const quoteAssetTransferred = toUSDT(quoteAssetToTransfer);
+        const forwardTonAmount = float(quoteAssetTransferred).div(baseAssetPrice);
+        const forwardInfo: Cell = beginCell()
+            .storeUint(0, 8)
+            .storeUint(blockchain.now!! + 1000, 256)
+            .storeUint(toBigInt(baseAssetPrice), 256)
+            .endCell();
+
+        const jettonTransfer: JettonTransfer = {
+            $$type: 'JettonTransfer',
+            query_id: 0n,
+            amount: toBigInt(quoteAssetTransferred),
+            destination: oracle.address,
+            response_destination: watchmaker.address,
+            custom_payload: null,
+            forward_ton_amount: toBigInt(forwardTonAmount) ,
+            forward_payload: beginCell().storeRef(forwardInfo).endCell(),
+        };
+
+        const watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
+        const watchmakerJettonContract = blockchain.openContract(
+            ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
+        );
+
+        const transferResult = await watchmakerJettonContract.send(
+            watchmaker.getSender(),
+            { value: toBigInt(forwardTonAmount) + GAS_FEE },
+            jettonTransfer
+        );
+        //printTransactionFees(transferResult.transactions);
+        const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+        expect(transferResult.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: oracle.address,
+            exitCode: 53238, // insufficient funds to pay for the gas
+        });
+    });
+
     it('Tick Test: Should return funds if remaining ton is sufficient to pay the gas', async () => {
         // TODO: the code in oracle for now is not support "Invalid jetton token received" and "Amount is lower than the lowerbound (theshold for baseAsset + gas)"
         // Initialize oracle
@@ -332,7 +426,6 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const quoteAssetToTransfer = 10; // 10usdt
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer);
-        //printTransactionFees(transfterResult.transactions);
     });
 
     it('Wind Test: Should timekeeper send wind msg to oracle', async () => {

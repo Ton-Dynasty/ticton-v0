@@ -375,6 +375,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         let ctx: Context = context();
         if (self.is_initialized == false) {
             // Return jetton back if gas is enough
+            // WARNING: Don't return jetton if the oracle is not initialized
             send(SendParameters{to: ctx.sender, value: ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE), mode: 0});
             return ;
         }
@@ -412,7 +413,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             }
             // Preserve the baseAssetAmount
             let needBaseAssetAmount: Int = int(msg.amount.float().div(baseAssetPrice));
-            require(needBaseAssetAmount * MIN_BASEASSET_TRESHOLD >= MIN_BASEASSET_TRESHOLD,
+            require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD,
                 "baseAssetAmount is too small"
             );
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
