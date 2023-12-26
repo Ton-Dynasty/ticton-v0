@@ -32,6 +32,11 @@ message Initialize {
     quoteAssetWallet: Address; // e.g. jetton wallet address for USDT
     rewardJettonContent: Cell; // reward token jetton content
 }
+message Refund {
+    alarmIndex: Int as uint256; // the interacted alarm index
+    refundQuoteAssetAmount: Int; // The amount of jetton to refund
+    receiver: Address; // the receiver of the jetton and tons
+}
 message Tick {
     expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
     baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset
@@ -235,6 +240,7 @@ contract Alarm with Initializable {
             }
         }
         // Check base asset and quote asset is sufficient
+        refundBaseAssetAmount = ((ctx.value - ctx.readForwardFee()) - needBaseAssetAmount);
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
         // WARNING: Don't check that ctx.value > needBaseAssetAmount
         if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
@@ -373,6 +379,28 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         self.jetton_content = msg.rewardJettonContent;
     }
 
+    receive(msg: Refund){
+        // msg.refundQuoteAssetAmount
+        // msg.receiver
+        self.requireAlarm(msg.alarmIndex);
+        let ctx: Context = context();
+        send(SendParameters{
+                to: msg.receiver,
+                value: 0,
+                mode: SendRemainingValue,
+                body: JettonTransfer{
+                    query_id: 0,
+                    amount: msg.refundQuoteAssetAmount,
+                    destination: msg.receiver,
+                    response_destination: msg.receiver,
+                    custom_payload: null,
+                    forward_ton_amount: 0,
+                    forward_payload: emptySlice()
+                }.toCell()
+            }
+        );
+    }
+
     receive(msg: JettonTransferNotification){
         let ctx: Context = context();
         if (self.is_initialized == false) {
@@ -415,9 +443,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             }
             // Preserve the baseAssetAmount
             let needBaseAssetAmount: Int = int(msg.amount.float().div(baseAssetPrice));
-            require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD,
-                "baseAssetAmount is too small"
-            );
+            require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
             );
@@ -529,7 +555,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                         destination: msg.timeKeeper,
                         response_destination: msg.timeKeeper,
                         custom_payload: null,
-                        forward_ton_amount: 0, // WARNING: We should send the remaining funds in forward_ton_amount back to the TimeKeeper and not to use SendRemainingValue mode
+                        forward_ton_amount: 0,
                         forward_payload: emptySlice()
                     }.toCell()
                 }
