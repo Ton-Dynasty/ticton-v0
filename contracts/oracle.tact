@@ -105,7 +105,7 @@ message Chime {
 }
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 100000;
-const DEPLOY_FEE: Int = ton("0.1");
+const DEPLOY_FEE: Int = ton("0.04");
 const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
@@ -198,13 +198,28 @@ contract Alarm with Initializable {
         // 3. Send Chime message to the Oracle to create a new alarm
         let ctx: Context = context();
         self.requireOracle(ctx.sender);
-        require(self.remainScale >= msg.buyNum, "Not enough scale to buy"); // MODIFIED: >= , and if this requirement is not satisfied, the jetton doesn't return back to the timekeeper
+        if (self.remainScale >= msg.buyNum) {
+            // send refund message back to oracle and exit
+            send(SendParameters{
+                    to: self.oracleAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    body: Refund{
+                        alarmIndex: self.index,
+                        refundQuoteAssetAmount: msg.quoteAssetAmount,
+                        receiver: self.oracleAddress
+                    }.toCell()
+                }
+            );
+            return ;
+        }
         let failed: Bool = false;
         let refundBaseAssetAmount: Int = 0; // 0 means return as much as possible
         let refundQuoteAssetAmount: Int = 0;
         let baseAssetPrice: Int = 0;
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
+        let remainBaseAssetAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
         if (msg.side == 0) {
             // Buy baseAsset
             if (self.baseAssetScale < msg.buyNum) {
@@ -239,29 +254,53 @@ contract Alarm with Initializable {
                 self.remainScale = (self.remainScale - msg.buyNum);
             }
         }
+        if (failed) {
+            // send refund message back to oracle and exit
+            // send refund message back to oracle and exit
+            send(SendParameters{
+                    to: self.oracleAddress,
+                    value: remainBaseAssetAmount,
+                    mode: 0,
+                    body: Refund{
+                        alarmIndex: self.index,
+                        refundQuoteAssetAmount: msg.quoteAssetAmount,
+                        receiver: self.oracleAddress
+                    }.toCell()
+                }
+            );
+            return ;
+        }
         // Check base asset and quote asset is sufficient
-        refundBaseAssetAmount = ((ctx.value - ctx.readForwardFee()) - needBaseAssetAmount);
+        refundBaseAssetAmount = (remainBaseAssetAmount - needBaseAssetAmount);
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
-        // WARNING: Don't check that ctx.value > needBaseAssetAmount
-        if (failed || refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
-            // Return all funds back to the TimeKeeper
-            refundQuoteAssetAmount = msg.quoteAssetAmount;
+        if (refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
+            // no enough asset to arbitrage, send refund message back to oracle and exit
+            send(SendParameters{
+                    to: self.oracleAddress,
+                    value: remainBaseAssetAmount,
+                    mode: 0,
+                    body: Refund{
+                        alarmIndex: self.index,
+                        refundQuoteAssetAmount: msg.quoteAssetAmount,
+                        receiver: self.oracleAddress
+                    }.toCell()
+                }
+            );
+            return ;
+        }
+        if (msg.side == 1) {
+            self.quoteAssetAmount =
+                (self.quoteAssetAmount - int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
         } else {
-            if (msg.side == 1) {
-                self.quoteAssetAmount =
-                    (self.quoteAssetAmount - int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
-            } else {
-                self.quoteAssetAmount =
-                    (self.quoteAssetAmount + int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
-            }
-            if (self.remainScale > 0) {
-                // only update price when remainScale > 0 and now() > (createdAt + TIMEPACE)
-                baseAssetPrice = self.baseAssetPrice;
-            }
+            self.quoteAssetAmount =
+                (self.quoteAssetAmount + int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
+        }
+        if (self.remainScale > 0) {
+            baseAssetPrice = self.baseAssetPrice;
         }
         send(SendParameters{
                 to: ctx.sender,
-                value: (ctx.value - ton("0.03")), // MODEFIED: - ton("0.02")
+                value: remainBaseAssetAmount,
                 mode: SendIgnoreErrors,
                 body: Chime{
                     alarmIndex: self.index,
@@ -523,7 +562,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
-                value: ton("0.04"), // MODIFIED: it has to be at least 0.02 ton to initialize a new alarm
+                value: DEPLOY_FEE,
                 mode: 0,
                 body: Tock{
                     createdAt: now(),
@@ -535,15 +574,11 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                 data: initCode.data
             }
         );
-        self.totalAlarms = (self.totalAlarms + 1); // MODIFIED: Miss to add totalAlarms
+        self.totalAlarms = (self.totalAlarms + 1);
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
         let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
-        // if (msg.refundBaseAssetAmount > 0) {
-        //     standardRefundAmount = (standardRefundAmount + msg.refundBaseAssetAmount);
-        // }
         if (msg.refundQuoteAssetAmount > 0) {
-            //dump("What up");
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
