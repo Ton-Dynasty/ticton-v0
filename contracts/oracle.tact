@@ -227,9 +227,10 @@ contract Alarm with Initializable {
             } else {
                 // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
                 // need ton amount = (buy amount * 2) - the amount you buy from this alarm
-                needQuoteAssetAmount = int((msg.newBaseAssetPrice.mul(msg.buyNum << 1) +
-                        self.baseAssetPrice.mul(msg.buyNum)) *
-                        QUOTEASSET_DECIMALS
+                needQuoteAssetAmount = int((msg.newBaseAssetPrice.mul(msg.buyNum << 1) *
+                        MIN_BASEASSET_TRESHOLD +
+                        self.baseAssetPrice.mul(msg.buyNum) *
+                        MIN_BASEASSET_TRESHOLD)
                 );
                 // WARNING: needQuoteAssetAmount is always 0 here
                 needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
@@ -243,9 +244,10 @@ contract Alarm with Initializable {
             if (self.quoteAssetScale < msg.buyNum) {
                 failed = true;
             } else {
-                needQuoteAssetAmount = int((msg.newBaseAssetPrice.mul(msg.buyNum << 1) -
-                        self.baseAssetPrice.mul(msg.buyNum)) *
-                        QUOTEASSET_DECIMALS
+                needQuoteAssetAmount = int((msg.newBaseAssetPrice.mul(msg.buyNum << 1) *
+                        MIN_BASEASSET_TRESHOLD -
+                        self.baseAssetPrice.mul(msg.buyNum) *
+                        MIN_BASEASSET_TRESHOLD)
                 );
                 needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
