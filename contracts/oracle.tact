@@ -580,6 +580,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
         let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
+
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
