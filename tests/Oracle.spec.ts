@@ -6,17 +6,25 @@ import { Ring, Mute, Chronoshift } from '../wrappers/Oracle_OracleV0';
 import { ExampleJettonMaster } from '../wrappers/Jetton_ExampleJettonMaster';
 import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet';
 import Decimal from 'decimal.js';
-import { float, toToken } from './utils';
+import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
 const GAS_FEE = toNano('1');
+const MIN_BASEASSET_THRESHOLD = toNano('1');
 const REWARD_JETTON_CONTENT = beginCell().endCell();
 
 const toUSDT = (amount: number | string | Decimal) => toToken(amount, QUOTEASSET_DECIMALS);
 const toTON = (amount: number | string | Decimal) => toToken(amount, BASEASSET_DECIMALS);
 const toBigInt = (amount: number | string | Decimal) => BigInt(new Decimal(amount).floor().toString());
+
+interface EstimateResult {
+    needBaseAsset: Decimal; // the minimum amount of baseAsset that user needs to bring
+    needQuoteAsset: Decimal; // the minimum amount of quoteAsset that user needs to bring
+    refundBaseAsset: Decimal; // the amount of baseAsset that oracle will refund to the caller (overestimated), if sendBaseAsset is not provided, this value will be 0
+    refundQuoteAsset: Decimal; // the amount of quoteAsset that oracle will refund to the caller (overestimated), if sendQuoteAsset is not provided, this value will be 0
+}
 
 describe('Oracle', () => {
     let blockchain: Blockchain;
@@ -46,6 +54,68 @@ describe('Oracle', () => {
     ) {
         return await jettonMaster.send(watchmaker.getSender(), { value: toNano('1') }, 'Mint:1');
     }
+
+    /**
+     *
+     * @param alarmIndex The index of alarm timekeeper want to wind
+     * @param newBaseAssetPrice The price of baseAsset, e.g. 2.5 means 1 ton = 2.5 usdt
+     * @param buyNum The amount of scales to buy, default to 1
+     * @param config The configuration for the estimation
+     * @returns The estimation result
+     */
+    const estimate = async (
+        alarmIndex: bigint,
+        newBaseAssetPrice: string,
+        buyNum: number = 1,
+        config?: {
+            sendBaseAsset?: number;
+            sendQuoteAsset?: number;
+            extraFees?: number;
+        }
+    ): Promise<EstimateResult> => {
+        const newPrice = float(newBaseAssetPrice);
+        const extraFees = config?.extraFees ?? toTON('1');
+        const alarmContract = blockchain.openContract(Alarm.fromAddress(await oracle.getGetAlarmAddress(alarmIndex)));
+        const oldPrice = new Decimal((await alarmContract.getGetBaseAssetPrice()).toString());
+
+        let needBaseAsset: Decimal;
+        let needQuoteAsset: Decimal;
+        let refundBaseAsset: Decimal;
+        let refundQuoteAsset: Decimal;
+
+        if (newPrice.gt(oldPrice)) {
+            // Timekeeper will pay quoteAsset and buy baseAsset
+            needQuoteAsset = int(
+                newPrice
+                    .mul(buyNum << 1)
+                    .mul(MIN_BASEASSET_THRESHOLD.toString())
+                    .add(oldPrice.mul(buyNum).mul(MIN_BASEASSET_THRESHOLD.toString()))
+            );
+            needBaseAsset = new Decimal(buyNum).mul(MIN_BASEASSET_THRESHOLD.toString()).add(extraFees);
+        } else {
+            // Timekeeper will pay baseAsset and buy quoteAsset
+            needBaseAsset = int(
+                newPrice
+                    .mul(buyNum << 1)
+                    .mul(MIN_BASEASSET_THRESHOLD.toString())
+                    .sub(oldPrice.mul(buyNum).mul(MIN_BASEASSET_THRESHOLD.toString()))
+            );
+            needQuoteAsset = new Decimal(buyNum).mul(3).mul(MIN_BASEASSET_THRESHOLD.toString()).add(extraFees);
+        }
+        refundBaseAsset = config?.sendBaseAsset
+            ? new Decimal(config.sendBaseAsset).sub(needQuoteAsset)
+            : new Decimal(0);
+        refundQuoteAsset = config?.sendQuoteAsset
+            ? new Decimal(config.sendQuoteAsset).sub(needQuoteAsset)
+            : new Decimal(0);
+        expect(refundBaseAsset.gte(0) || refundQuoteAsset.gte(0)).toBeTruthy();
+        return {
+            needBaseAsset,
+            needQuoteAsset,
+            refundBaseAsset,
+            refundQuoteAsset,
+        };
+    };
 
     /**
      *
@@ -96,7 +166,7 @@ describe('Oracle', () => {
         );
 
         // For test: Should send Jetton back if currentTimestamp > expireAt
-        if(expireAt != blockchain.now!! + 1000 || baseAssetToTransfer != 1) {
+        if (expireAt != blockchain.now!! + 1000 || baseAssetToTransfer != 1) {
             return transferResult;
         }
         //printTransactionFees(transferResult.transactions);
@@ -188,8 +258,7 @@ describe('Oracle', () => {
         let baseAssetPrice;
         if (side == 0) {
             baseAssetPrice = float(toUSDT(quoteAssetToTransfer - assetToBuy)).divToInt(toTON(baseAssetToTransfer)); //float(toUSDT(newBaseAssetPrice));
-        }
-        else {
+        } else {
             baseAssetPrice = float(toUSDT(quoteAssetToTransfer)).divToInt(toTON(baseAssetToTransfer - assetToBuy)); //float(toUSDT(newBaseAssetPrice));
         }
         const quoteAssetTransferred = toUSDT(quoteAssetToTransfer);
@@ -374,7 +443,7 @@ describe('Oracle', () => {
         expect(result.transactions).toHaveTransaction({
             from: oracleWalletAddress,
             to: oracle.address,
-            exitCode: 62368 // baseAssetAmount is too small
+            exitCode: 62368, // baseAssetAmount is too small
         });
     });
 
@@ -401,7 +470,7 @@ describe('Oracle', () => {
             destination: oracle.address,
             response_destination: watchmaker.address,
             custom_payload: null,
-            forward_ton_amount: toBigInt(forwardTonAmount) ,
+            forward_ton_amount: toBigInt(forwardTonAmount),
             forward_payload: beginCell().storeRef(forwardInfo).endCell(),
         };
 
@@ -592,7 +661,7 @@ describe('Oracle', () => {
             from: oracleWalletAddress,
             to: oracle.address,
             success: false,
-            exitCode: 37019 // Alarm index is incorrect
+            exitCode: 37019, // Alarm index is incorrect
         });
     });
 
@@ -629,7 +698,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: AlarmAddress,
             to: oracle.address,
-            success: true
+            success: true,
         });
 
         // Check that oracle send JettonTransfer msg to oracle's jetton wallet
@@ -645,7 +714,6 @@ describe('Oracle', () => {
             to: timekeeperWalletAddress,
             success: true,
         });
-
     });
 
     it('Wind Test: Should fail transaction if Reset message is not from Oracle', async () => {
@@ -1279,7 +1347,7 @@ describe('Oracle', () => {
         let side = 0;
         let baseAssetToTransfer = 2;
         let quoteAssetToTransfer = 10;
-        let assettoBuy = quoteAssetToTransfer1
+        let assettoBuy = quoteAssetToTransfer1;
         await windInJettonTransfer(
             timekeeper,
             oracle,
