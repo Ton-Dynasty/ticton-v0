@@ -103,14 +103,16 @@ describe('Oracle', () => {
             );
             needBaseAsset = new Decimal(buyNum).mul(3).mul(MIN_BASEASSET_THRESHOLD.toString()).add(extraFees);
         }
-        refundBaseAsset = config?.sendBaseAsset
-            ? new Decimal(config.sendBaseAsset).sub(needQuoteAsset)
-            : new Decimal(0);
-        refundQuoteAsset = config?.sendQuoteAsset
-            ? new Decimal(config.sendQuoteAsset).sub(needQuoteAsset)
-            : new Decimal(0);
+        refundBaseAsset = new Decimal(config?.sendBaseAsset ?? needBaseAsset).sub(needBaseAsset);
+        refundQuoteAsset = new Decimal(config?.sendQuoteAsset ?? needQuoteAsset).sub(needQuoteAsset);
+        if (needQuoteAsset.lt(0)) {
+            console.log('needQuoteAsset is less than 0, add to refundQuoteAsset');
+            refundQuoteAsset = refundQuoteAsset.add(needQuoteAsset);
+        }
         if (refundBaseAsset.lt(0) || refundQuoteAsset.lt(0)) {
-            console.error('refundBaseAsset or refundQuoteAsset is less than 0');
+            console.error('refundBaseAsset or refundQuoteAsset is less than 0, return all funds');
+            refundBaseAsset = config?.sendBaseAsset ? new Decimal(config.sendBaseAsset) : needBaseAsset;
+            refundQuoteAsset = config?.sendQuoteAsset ? new Decimal(config.sendQuoteAsset) : needQuoteAsset;
         }
         return {
             newPrice,
