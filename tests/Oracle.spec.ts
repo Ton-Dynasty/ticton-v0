@@ -95,13 +95,13 @@ describe('Oracle', () => {
             needBaseAsset = new Decimal(buyNum).mul(MIN_BASEASSET_THRESHOLD.toString()).add(extraFees);
         } else {
             // Timekeeper will pay baseAsset and buy quoteAsset
-            needBaseAsset = int(
+            needQuoteAsset = int(
                 newPrice
                     .mul(buyNum << 1)
                     .mul(MIN_BASEASSET_THRESHOLD.toString())
                     .sub(oldPrice.mul(buyNum).mul(MIN_BASEASSET_THRESHOLD.toString()))
             );
-            needQuoteAsset = new Decimal(buyNum).mul(3).mul(MIN_BASEASSET_THRESHOLD.toString()).add(extraFees);
+            needBaseAsset = new Decimal(buyNum).mul(3).mul(MIN_BASEASSET_THRESHOLD.toString()).add(extraFees);
         }
         refundBaseAsset = config?.sendBaseAsset
             ? new Decimal(config.sendBaseAsset).sub(needQuoteAsset)
