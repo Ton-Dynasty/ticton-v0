@@ -20,6 +20,7 @@ const toTON = (amount: number | string | Decimal) => toToken(amount, BASEASSET_D
 const toBigInt = (amount: number | string | Decimal) => BigInt(new Decimal(amount).floor().toString());
 
 interface EstimateResult {
+    newPrice: Decimal; // the new price of baseAsset (should be float format)
     needBaseAsset: Decimal; // the minimum amount of baseAsset that user needs to bring
     needQuoteAsset: Decimal; // the minimum amount of quoteAsset that user needs to bring
     refundBaseAsset: Decimal; // the amount of baseAsset that oracle will refund to the caller (overestimated), if sendBaseAsset is not provided, this value will be 0
@@ -112,6 +113,7 @@ describe('Oracle', () => {
             console.error('refundBaseAsset or refundQuoteAsset is less than 0');
         }
         return {
+            newPrice,
             needBaseAsset,
             needQuoteAsset,
             refundBaseAsset,
@@ -265,10 +267,9 @@ describe('Oracle', () => {
         if (side == 0) {
             quoteAssetTransferred = toUSDT(quoteAssetToTransfer + assetToBuy);
             forwardTonAmount = float(quoteAssetTransferred).divToInt(baseAssetPrice).add(toTON(extraFees));
-        }
-        else {
+        } else {
             quoteAssetTransferred = toUSDT(quoteAssetToTransfer - assetToBuy * buyPrice);
-            forwardTonAmount = toTON(baseAssetToTransfer + assetToBuy + extraFees)
+            forwardTonAmount = toTON(baseAssetToTransfer + assetToBuy + extraFees);
         }
         const forwardInfo: Cell = beginCell()
             .storeUint(op, 8)
@@ -529,7 +530,7 @@ describe('Oracle', () => {
         let buyNum = 1;
         let side = 0;
         let baseAssetToTransfer = 2;
-        let quoteAssetToTransfer2 = 10//14; // baseAssetPrice = 1 ton / 5 usdt
+        let quoteAssetToTransfer2 = 10; //14; // baseAssetPrice = 1 ton / 5 usdt
         let assetToBuy = 4;
         const windResult = await windInJettonTransfer(
             timekeeper,
@@ -716,7 +717,6 @@ describe('Oracle', () => {
             to: timekeeperWalletAddress,
             success: true,
         });
-
     });
 
     it('Wind Test: Should return funds if alarmIndex is incorrect', async () => {
@@ -1051,7 +1051,7 @@ describe('Oracle', () => {
         let buyNum = 1;
         let side = 1;
         let baseAssetToTransfer = 2; // 1 ton for buy 2 for tick a new alarm
-        
+
         let quoteAssetToTransfer2 = 2 * 3; // baseAssetPrice = 2 ton / 3 * 2 usdt
         let assetToBuy = 1;
         let buyPrice = 2;
@@ -1228,7 +1228,7 @@ describe('Oracle', () => {
             success: true,
         });
 
-         // Check that Alarm contract send Refund msg to oracle
+        // Check that Alarm contract send Refund msg to oracle
         expect(windResult.transactions).toHaveTransaction({
             from: AlarmAddress,
             to: oracle.address,
