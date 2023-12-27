@@ -108,6 +108,7 @@ const QUOTEASSET_DECIMALS: Int = 100000;
 const DEPLOY_FEE: Int = ton("0.05");
 const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
+const REFUND_FEE: Int = ton("0.02");
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
 const TIMEPACE: Int = 60; // 1 minutes
 
@@ -198,12 +199,13 @@ contract Alarm with Initializable {
         // 3. Send Chime message to the Oracle to create a new alarm
         let ctx: Context = context();
         self.requireOracle(ctx.sender);
+        let remainBaseAssetAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
         if (self.remainScale < msg.buyNum) {
             // send refund message back to oracle and exit
             send(SendParameters{
                     to: self.oracleAddress,
-                    value: 0,
-                    mode: SendRemainingValue,
+                    value: remainBaseAssetAmount - REFUND_FEE,
+                    mode: SendIgnoreErrors,
                     body: Refund{
                         alarmIndex: self.index,
                         refundQuoteAssetAmount: msg.quoteAssetAmount,
@@ -219,7 +221,6 @@ contract Alarm with Initializable {
         let baseAssetPrice: Int = 0;
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
-        let remainBaseAssetAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
         if (msg.side == 0) {
             // Buy baseAsset
             if (self.baseAssetScale < msg.buyNum) {
@@ -260,12 +261,12 @@ contract Alarm with Initializable {
             // send refund message back to oracle and exit
             send(SendParameters{
                     to: self.oracleAddress,
-                    value: remainBaseAssetAmount,
-                    mode: 0,
+                    value: remainBaseAssetAmount - REFUND_FEE,
+                    mode: SendIgnoreErrors,
                     body: Refund{
                         alarmIndex: self.index,
                         refundQuoteAssetAmount: msg.quoteAssetAmount,
-                        receiver: self.oracleAddress
+                        receiver: msg.sender
                     }.toCell()
                 }
             );
@@ -274,17 +275,16 @@ contract Alarm with Initializable {
         // Check base asset and quote asset is sufficient
         refundBaseAssetAmount = (remainBaseAssetAmount - needBaseAssetAmount);
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
-
         if (refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // no enough asset to arbitrage, send refund message back to oracle and exit
             send(SendParameters{
                     to: self.oracleAddress,
-                    value: remainBaseAssetAmount,
-                    mode: 0,
+                    value: remainBaseAssetAmount - REFUND_FEE,
+                    mode: SendIgnoreErrors,
                     body: Refund{
                         alarmIndex: self.index,
                         refundQuoteAssetAmount: msg.quoteAssetAmount,
-                        receiver: self.oracleAddress
+                        receiver: msg.sender
                     }.toCell()
                 }
             );
@@ -300,7 +300,6 @@ contract Alarm with Initializable {
         if (self.remainScale > 0) {
             baseAssetPrice = self.baseAssetPrice;
         }
-        //dump(refundBaseAssetAmount);
         send(SendParameters{
                 to: ctx.sender,
                 value: refundBaseAssetAmount,
@@ -566,7 +565,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         send(SendParameters{
                 to: contractAddress(initCode),
                 value: DEPLOY_FEE,
-                mode: SendIgnoreErrors,
+                mode: 0,
                 body: Tock{
                     createdAt: now(),
                     scale: msg.newScale,
