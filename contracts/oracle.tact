@@ -50,13 +50,11 @@ message Tock {
 message Wind {
     alarmIndex: Int as uint256; // the interacted alarm index
     buyNum: Int as uint32; // how many scale to buy
-    side: Bool; // 0 for baseAsset, 1 for quoteAsset
     newBaseAssetPrice: Int as uint256; // new baseAsset price relative to quoteAsset in fixed point float
 }
 message Reset {
     sender: Address;
     buyNum: Int; // The number of scales to buy
-    side: Int; // 0 for baseAsset, 1 for quoteAsset
     quoteAssetAmount: Int; // The amount of quoteAsset oracle received
     newBaseAssetPrice: Int; // The new baseAsset price relative to quoteAsset
 }
@@ -221,7 +219,7 @@ contract Alarm with Initializable {
         let baseAssetPrice: Int = 0;
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
-        if (msg.side == 0) {
+        if (msg.newBaseAssetPrice > self.baseAssetPrice) {
             // Buy baseAsset
             if (self.baseAssetScale < msg.buyNum) {
                 failed = true;
@@ -290,7 +288,7 @@ contract Alarm with Initializable {
             );
             return ;
         }
-        if (msg.side == 1) {
+        if (msg.newBaseAssetPrice <= self.baseAssetPrice) {
             self.quoteAssetAmount =
                 (self.quoteAssetAmount - int(self.baseAssetPrice.mul(msg.buyNum)) * QUOTEASSET_DECIMALS);
         } else {
@@ -516,11 +514,9 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             // TimeKeepers send Reset message to the alarm, reply with Sync message
             let alarmIndex: Int = sc.loadUint(256);
             let buyNum: Int = sc.loadUint(32);
-            let side: Int = sc.loadUint(1);
             let newBaseAssetPrice: Int = sc.loadUint(256);
             // Don't we need to add new baseprice? right now the alarm that timekeep build its baseprice is 0
             require(alarmIndex < self.totalAlarms, "alarmIndex out of range");
-            require(side == 0 || side == 1, "side must be either 0 or 1");
             send(SendParameters{
                     to: contractAddress(self._calculateAlarmInit(alarmIndex)),
                     value: (ctx.value - STORAGE_FEE),
@@ -528,7 +524,6 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                     body: Reset{
                         sender: msg.sender,
                         buyNum: buyNum,
-                        side: side,
                         quoteAssetAmount: msg.amount,
                         newBaseAssetPrice: newBaseAssetPrice
                     }.toCell()

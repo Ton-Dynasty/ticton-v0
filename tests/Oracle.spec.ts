@@ -75,7 +75,7 @@ describe('Oracle', () => {
         }
     ): Promise<EstimateResult> => {
         const newPrice = float(newBaseAssetPrice).mul(toUSDT(1)).divToInt(toTON(1));
-        const extraFees = config?.extraFees ? toTON(config?.extraFees): toTON('1');
+        const extraFees = config?.extraFees ? toTON(config?.extraFees) : toTON('1');
         const alarmContract = blockchain.openContract(Alarm.fromAddress(await oracle.getGetAlarmAddress(alarmIndex)));
         const oldPrice = new Decimal((await alarmContract.getGetBaseAssetPrice()).toString());
 
@@ -259,24 +259,24 @@ describe('Oracle', () => {
         baseAssetDelta: bigint = 0n,
         quoteAssetDelta: bigint = 0n,
         config?: {
-            sendBaseAsset?: number,
-            sendQuoteAsset?: number,
-            extraFees?: number,
-            defaultEstimateResult?: EstimateResult,
+            sendBaseAsset?: number;
+            sendQuoteAsset?: number;
+            extraFees?: number;
+            defaultEstimateResult?: EstimateResult;
         }
     ) {
         let op = 1; // 1 means wind
         let estimateResult: EstimateResult = {
             newPrice: new Decimal(0),
-            needBaseAsset:  toTON(10),
+            needBaseAsset: toTON(10),
             needQuoteAsset: new Decimal(0),
             refundBaseAsset: new Decimal(0),
             refundQuoteAsset: new Decimal(0),
         };
-        try{
-            estimateResult = await estimate(alarmIndex, newPrice, buyNum, config)
-        } catch (err){
-            estimateResult = config?.defaultEstimateResult ?? estimateResult
+        try {
+            estimateResult = await estimate(alarmIndex, newPrice, buyNum, config);
+        } catch (err) {
+            estimateResult = config?.defaultEstimateResult ?? estimateResult;
             //console.error(err)
         }
         //console.log('estimateResult ',estimateResult)
@@ -312,7 +312,7 @@ describe('Oracle', () => {
             jettonTransfer
         );
 
-        return {windResult, estimateResult};
+        return { windResult, estimateResult };
     }
 
     beforeEach(async () => {
@@ -541,14 +541,7 @@ describe('Oracle', () => {
         let baseAssetToTransfer = 2;
         let quoteAssetToTransfer2 = 10; //14; // baseAssetPrice = 1 ton / 5 usdt
         let assetToBuy = 4;
-        const {windResult} = await windInJettonTransfer(
-            timekeeper,
-            oracle,
-            alarmIndex,
-            buyNum,
-            side,
-            "5"
-        );
+        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, '5');
         //printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
@@ -658,13 +651,13 @@ describe('Oracle', () => {
         let baseAssetToTransfer = 2;
         let quoteAssetToTransfer2 = 10; // baseAssetPrice = 1 ton / 5 usdt
         let assetToBuy = 0;
-        const {windResult, estimateResult} = await windInJettonTransfer(
+        const { windResult, estimateResult } = await windInJettonTransfer(
             timekeeper,
             oracle,
             alarmIndex,
             buyNum,
             side,
-            "5",
+            '5',
             -1n
         );
         //printTransactionFees(windResult.transactions);
@@ -704,15 +697,15 @@ describe('Oracle', () => {
         });
 
         let refundMsg: Refund = {
-            $$type: "Refund",
+            $$type: 'Refund',
             alarmIndex: alarmIndex,
             refundQuoteAssetAmount: toBigInt(estimateResult.needQuoteAsset),
-            receiver: timekeeper.address
+            receiver: timekeeper.address,
         };
         const refundPayload = beginCell();
-        const builderFunc = storeRefund(refundMsg)
-        builderFunc(refundPayload)
-    
+        const builderFunc = storeRefund(refundMsg);
+        builderFunc(refundPayload);
+
         // Check that Alarm contract send Refund msg to oracle
         expect(windResult.transactions).toHaveTransaction({
             from: AlarmAddress,
@@ -720,7 +713,6 @@ describe('Oracle', () => {
             body: refundPayload.endCell(),
             success: true,
         });
-        
 
         //Check that oracle send JettonTransfer msg to oracle's jetton wallet
         expect(windResult.transactions).toHaveTransaction({
@@ -759,14 +751,7 @@ describe('Oracle', () => {
         let side = 0;
         let baseAssetToTransfer = 2;
         let quoteAssetToTransfer2 = 20;
-        let {windResult} = await windInJettonTransfer(
-            timekeeper,
-            oracle,
-            wrongAlarmIndex,
-            buyNum,
-            side,
-            "10"
-        );
+        let { windResult } = await windInJettonTransfer(timekeeper, oracle, wrongAlarmIndex, buyNum, side, '10');
         //printTransactionFees(windResult.transactions);
         // Fail because alarmIndex is incorrect
         expect(windResult.transactions).toHaveTransaction({
@@ -794,14 +779,7 @@ describe('Oracle', () => {
         let side = 0;
         let baseAssetToTransfer = 2;
         let quoteAssetToTransfer2 = 20;
-        let {windResult} = await windInJettonTransfer(
-            timekeeper,
-            oracle,
-            alarmIndex,
-            buyNum,
-            side,
-            "5"
-        );
+        let { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, '5');
 
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
 
@@ -840,7 +818,6 @@ describe('Oracle', () => {
             $$type: 'Reset',
             sender: owner.address,
             buyNum: 1n, // The number of scales to buy
-            side: 1n, // 0 for baseAsset, 1 for quoteAsset
             quoteAssetAmount: 1n, // The amount of quoteAsset oracle received
             newBaseAssetPrice: 1n, // The new baseAssetPrice
         };
@@ -917,15 +894,7 @@ describe('Oracle', () => {
         let baseAssetToTransfer2 = 2;
         let quoteAssetToTransfer2 = 10; // baseAssetPrice = 1 ton / 5 usdt
         let assetToBuy = quoteAssetToTransfer1; // 4
-        let {windResult} = await windInJettonTransfer(
-            timekeeper,
-            oracle,
-            alarmIndex,
-            buyNum,
-            side,
-            "5"
-        );
-
+        let { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, side, '5');
 
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
         alarmIndexAfter = await oracle.getTotalAmount();
@@ -950,13 +919,13 @@ describe('Oracle', () => {
         let baseAssetToTransfer3 = 4;
         let quoteAssetToTransfer3 = 20;
         let assetToBuy3 = 10;
-        let {windResult: windResult2} = await windInJettonTransfer(
+        let { windResult: windResult2 } = await windInJettonTransfer(
             timekeeper2,
             oracle,
             alarmIndex2,
             buyNum2,
             side2,
-            "6"
+            '6'
         );
         //printTransactionFees(windResult2.transactions);
         let timekeeperWalletAddress2 = await jettonMaster.getGetWalletAddress(timekeeper2.address);
@@ -1035,7 +1004,6 @@ describe('Oracle', () => {
             to: timekeeper2.address,
             success: true,
         });
-
     });
 
     it('Wind Test: Should timekeeper buy quoteAsset', async () => {
@@ -1055,13 +1023,13 @@ describe('Oracle', () => {
         let alarmIndex = 0n;
         let buyNum = 1;
         let side = 1;
-        const {windResult, estimateResult} = await windInJettonTransfer(
+        const { windResult, estimateResult } = await windInJettonTransfer(
             timekeeper,
             oracle,
             alarmIndex,
             buyNum,
             side,
-            "3"
+            '3'
         );
         // console.log(estimateResult)
         // printTransactionFees(windResult.transactions);
@@ -1541,14 +1509,7 @@ describe('Oracle', () => {
         let baseAssetToTransfer = 2;
         let quoteAssetToTransfer = 10;
         let assettoBuy = quoteAssetToTransfer1;
-        await windInJettonTransfer(
-            timekeeper,
-            oracle,
-            alarmIndexBefore,
-            buyNum,
-            side,
-            "5"
-        );
+        await windInJettonTransfer(timekeeper, oracle, alarmIndexBefore, buyNum, side, '5');
         // printTransactionFees(windResult.transactions);
 
         // Check that remainScale of alarm0 is 0
