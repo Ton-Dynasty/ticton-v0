@@ -284,7 +284,6 @@ describe('Oracle', () => {
             .storeUint(op, 8)
             .storeUint(alarmIndex, 256)
             .storeUint(buyNum, 32)
-            .storeUint(side, 1)
             .storeUint(toBigInt(estimateResult.newPrice), 256)
             .endCell();
         const jettonTransfer: JettonTransfer = {
