@@ -73,7 +73,7 @@ describe('Oracle', () => {
             extraFees?: number;
         }
     ): Promise<EstimateResult> => {
-        const newPrice = float(newBaseAssetPrice);
+        const newPrice = float(newBaseAssetPrice).mul(toUSDT(1)).divToInt(toTON(1));
         const extraFees = config?.extraFees ?? toTON('1');
         const alarmContract = blockchain.openContract(Alarm.fromAddress(await oracle.getGetAlarmAddress(alarmIndex)));
         const oldPrice = new Decimal((await alarmContract.getGetBaseAssetPrice()).toString());
