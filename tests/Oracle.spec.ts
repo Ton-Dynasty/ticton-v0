@@ -8,6 +8,7 @@ import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet'
 import Decimal from 'decimal.js';
 import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
+import { watch } from 'fs';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
@@ -1879,7 +1880,8 @@ describe('Oracle', () => {
             await ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
         );
         // Get the balance of watchmaker's jetton wallet
-        let balanceBefore = (await watchmakerJettonWallet.getGetWalletData()).balance;
+        let jettonBalanceBefore = (await watchmakerJettonWallet.getGetWalletData()).balance;
+        let balanceBefore = await watchmaker.getBalance();
 
         // Watchmaker send ring msg to oracle
         let ring: Ring = {
@@ -1894,11 +1896,12 @@ describe('Oracle', () => {
             },
             ring
         );
+        let balanceAfter = await watchmaker.getBalance();
 
         //printTransactionFees(ringResult.transactions);
 
         // Get the balance of watchmaker's jetton wallet
-        let balanceAfter = (await watchmakerJettonWallet.getGetWalletData()).balance;
+        let jettonBalanceAfter = (await watchmakerJettonWallet.getGetWalletData()).balance;
 
         // Check that watchmaker's jetton wallet get the remaining funds
         let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
@@ -1910,9 +1913,12 @@ describe('Oracle', () => {
         });
 
         // Make sure that token is returned to watchmaker
-        expect(Number(balanceAfter) / 2 ** 64).toBeCloseTo(
-            Number(balanceBefore + BigInt(quoteAssetToTransfer1 * 10 ** 6)) / 2 ** 64,
+        expect(Number(jettonBalanceAfter) / 2 ** 64).toBeCloseTo(
+            Number(jettonBalanceBefore + BigInt(quoteAssetToTransfer1 * 10 ** 6)) / 2 ** 64,
             5
         );
+
+        // Check that watchmaker get 1 ton that he ticked before
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('0.084')); // it won't be exactly 1 because of the transaction fee
     });
 });
