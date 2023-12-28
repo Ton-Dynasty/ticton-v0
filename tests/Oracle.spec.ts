@@ -114,6 +114,7 @@ describe('Oracle', () => {
             refundBaseAsset = config?.sendBaseAsset ? new Decimal(config.sendBaseAsset) : needBaseAsset;
             refundQuoteAsset = config?.sendQuoteAsset ? new Decimal(config.sendQuoteAsset) : needQuoteAsset;
         }
+        refundBaseAsset = refundBaseAsset.add(extraFees.sub(toTON(0.0324)));
         return {
             newPrice,
             needBaseAsset,
@@ -254,8 +255,8 @@ describe('Oracle', () => {
         alarmIndex: bigint,
         buyNum: number,
         newPrice: string,
-        baseAssetDelta: bigint = 0n,
-        quoteAssetDelta: bigint = 0n,
+        baseAssetDelta: number = 0,
+        quoteAssetDelta: number = 0,
         config?: {
             sendBaseAsset?: number;
             sendQuoteAsset?: number;
@@ -304,7 +305,7 @@ describe('Oracle', () => {
         const windResult = await timekeeperJettonContract.send(
             timekeeper.getSender(),
             {
-                value: toBigInt(estimateResult.needBaseAsset) + GAS_FEE,
+                value: toBigInt(estimateResult.needBaseAsset) + toNano(baseAssetDelta) + GAS_FEE,
             },
             jettonTransfer
         );
@@ -664,8 +665,8 @@ describe('Oracle', () => {
             alarmIndex2,
             buyNum2,
             '1',
-            0n,
-            30n,
+            0,
+            30,
             config
         );
         let balacenceAfter = (await timekeeprWallet.getGetWalletData()).balance;
@@ -698,11 +699,30 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
+        let sendBaseAsset = 2080000000;
         let config = {
             //sendBaseAsset: number;
-            sendBaseAsset: 10000000000,
+            sendBaseAsset: sendBaseAsset,
+            extraFees: 0.08,
         };
-        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5', 1n, 0n, config);
+        let beforeBalance = await timekeeper.getBalance();
+        const { windResult, estimateResult } = await windInJettonTransfer(
+            timekeeper,
+            oracle,
+            alarmIndex,
+            buyNum,
+            '5',
+            1,
+            0,
+            config
+        );
+        let afterBalance = await timekeeper.getBalance();
+        let refundBaseAsset = estimateResult.refundBaseAsset;
+        let sendBackAmountInAlarm = 0.088; // after alarm initialized, it will return the remaining funds back to the watchmaker
+        expect(Number(beforeBalance - afterBalance) / 1000000000).toBeCloseTo(
+            sendBackAmountInAlarm + (sendBaseAsset - Number(refundBaseAsset)) / 1000000000,
+            1
+        );
         //printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
@@ -765,6 +785,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: timekeeper.address,
+            value: 1046463956n, // make sure the refund amount is correct
             success: true,
         });
 
@@ -825,8 +846,8 @@ describe('Oracle', () => {
             alarmIndex,
             buyNum,
             '5',
-            0n,
-            20n,
+            0,
+            20,
             config
         );
         //printTransactionFees(windResult.transactions);
@@ -947,7 +968,7 @@ describe('Oracle', () => {
             alarmIndex,
             buyNum,
             '5',
-            -1n
+            -1
         );
         //printTransactionFees(windResult.transactions);
 
@@ -1172,8 +1193,21 @@ describe('Oracle', () => {
         blockchain!!.now = Math.floor(Date.now() / 1000);
         let alarmIndex = 0n;
         let buyNum = 1;
-        let { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
-
+        let config = {
+            extraFees: 0.08,
+        };
+        let { windResult, estimateResult } = await windInJettonTransfer(
+            timekeeper,
+            oracle,
+            alarmIndex,
+            buyNum,
+            '5',
+            0,
+            0,
+            config
+        );
+        // console.log('estimateResult ', estimateResult);
+        // printTransactionFees(windResult.transactions);
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
         alarmIndexAfter = await oracle.getTotalAmount();
         expect(alarmIndexAfter).toEqual(2n);
@@ -1394,7 +1428,7 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
-        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '3', 0n, -1n);
+        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '3', 0, -1);
         //printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
