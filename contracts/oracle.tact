@@ -648,12 +648,16 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         if (msg.remainScale > 0) {
             rewardAmount = self.sync(msg.createdAt, msg.baseAssetPrice);
         }
+        // dump(msg.remainQuoteAssetScale);
+        // dump(msg.remainBaseAssetScale);
+        let ctx: Context = context();
+        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: (msg.remainBaseAssetScale * BASEASSET_DECIMALS + msg.extraBaseAssetAmount),
+                    value: (msg.remainBaseAssetScale * BASEASSET_DECIMALS + msg.extraBaseAssetAmount) + standardRefundAmount,
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
@@ -670,7 +674,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             //  Refund TON
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + msg.extraBaseAssetAmount),
+                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + msg.extraBaseAssetAmount)+ standardRefundAmount,
                     mode: SendPayGasSeparately,
                     body: "SlickBack".asComment()
                 }
