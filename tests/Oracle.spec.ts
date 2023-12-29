@@ -1919,7 +1919,7 @@ describe('Oracle', () => {
         );
 
         // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('0.084')); // it won't be exactly 1 because of the transaction fee
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('0.84')); // it won't be exactly 1 because of the transaction fee
     });
 
     it('Ring Test: Should return remaining funds back to Watchmaker (If msg.remainBaseAssetScale > 0)', async () => {
