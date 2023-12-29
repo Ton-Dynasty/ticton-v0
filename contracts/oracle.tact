@@ -321,7 +321,8 @@ contract Alarm with Initializable {
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
-        let extraBaseAssetAmount: Int = abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
+        let ctx: Context = context();
+        let extraBaseAssetAmount: Int = ctx.value ;//abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
         send(SendParameters{
                 to: self.oracleAddress,
                 value: 0,
@@ -651,13 +652,13 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         // dump(msg.remainQuoteAssetScale);
         // dump(msg.remainBaseAssetScale);
         let ctx: Context = context();
-        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
+            let sendValue: Int = ctx.value - STORAGE_FEE - ctx.readForwardFee();
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: (msg.remainBaseAssetScale * BASEASSET_DECIMALS + msg.extraBaseAssetAmount) + standardRefundAmount,
+                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD ) + sendValue,
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
@@ -672,10 +673,11 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             );
         } else if (msg.remainBaseAssetScale > 0) {
             //  Refund TON
+            let standardRefundAmount: Int = ((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee() - ton("0.032"));
             send(SendParameters{
-                    to: self.quoteAssetWallet,
-                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + msg.extraBaseAssetAmount)+ standardRefundAmount,
-                    mode: SendPayGasSeparately,
+                    to: msg.watchmaker,
+                    value: msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + standardRefundAmount,
+                    mode: 0,
                     body: "SlickBack".asComment()
                 }
             );
@@ -740,5 +742,9 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
 
     get fun getLatestBaseAssetPrice(): Int {
         return self.latestBaseAssetPrice;
+    }
+
+    get fun getMyBalance(): Int {
+        return myBalance();
     }
 }

@@ -1853,7 +1853,7 @@ describe('Oracle', () => {
         expect(latestPriceAfter).toEqual(latestPrice);
     });
 
-    it('Ring Test: Should return remaining funds back to Watchmaker', async () => {
+    it('Ring Test: Should return remaining funds back to Watchmaker (If remainQuoteAssetScale > 0)', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
 
@@ -1920,5 +1920,59 @@ describe('Oracle', () => {
 
         // Check that watchmaker get 1 ton that he ticked before
         expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('0.084')); // it won't be exactly 1 because of the transaction fee
+    });
+
+    it('Ring Test: Should return remaining funds back to Watchmaker (If msg.remainBaseAssetScale > 0)', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+
+        // watchmaker post price to oracle
+        const quoteAssetToTransfer1 = 8; // 2usdt
+
+        await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
+
+        // Check that alarm count is 1
+        let alarmIndexAfter = await oracle.getTotalAmount();
+        expect(alarmIndexAfter).toEqual(1n);
+
+        let timekeeper: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper');
+        await mintToken(jettonMaster, timekeeper);
+        let alarmIndex = 0n;
+        let buyNum = 1;
+        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
+        //printTransactionFees(windResult.transactions);
+
+        // Watchmaker should send ring msg to oracle
+
+        // TODO: Wait for 100 seconds on the blockchain
+        blockchain.now = blockchain.now!! + 100;
+
+        let balanceBefore = await watchmaker.getBalance();
+
+        // Watchmaker send ring msg to oracle
+        let ring: Ring = {
+            $$type: 'Ring',
+            queryID: 0n,
+            alarmIndex: alarmIndex,
+        };
+        let ringResult = await oracle.send(
+            watchmaker.getSender(),
+            {
+                value: toNano('10'),
+            },
+            ring
+        );
+        let balanceAfter = await watchmaker.getBalance();
+        // console.log('oracle balance: ', await oracle.getGetMyBalance());
+        // console.log('balanceAfter - balanceBefore', balanceAfter - balanceBefore);
+
+        //printTransactionFees(ringResult.transactions);
+
+        // Check that watchmaker get 1 ton that he ticked before
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('2') - toNano('0.072')); // it won't be exactly 2 because of the transaction fee
+        expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('1.928')); // This 1.99 ton is timekeeper's baseAsset
     });
 });
