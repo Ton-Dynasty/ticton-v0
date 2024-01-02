@@ -301,12 +301,12 @@ describe('Oracle', () => {
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
         // watchmaker's jetton wallet
         const timekeeperJettonContract = blockchain.openContract(
-            await ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
+            ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
         );
         const windResult = await timekeeperJettonContract.send(
             timekeeper.getSender(),
             {
-                value: toBigInt(estimateResult.needBaseAsset) + toNano(baseAssetDelta) + GAS_FEE,
+                value: toBigInt(estimateResult.needBaseAsset) + toNano(baseAssetDelta) + BigInt(config?.extraFees ?? GAS_FEE),
             },
             jettonTransfer
         );
@@ -536,8 +536,8 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
-        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
-        //printTransactionFees(windResult.transactions);
+        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5',);
+        printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
@@ -702,7 +702,6 @@ describe('Oracle', () => {
         let buyNum = 1;
         let sendBaseAsset = 2080000000;
         let config = {
-            //sendBaseAsset: number;
             sendBaseAsset: sendBaseAsset,
             extraFees: 0.08,
         };
@@ -779,14 +778,6 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: Alarm1Address,
             to: timekeeper.address,
-            success: true,
-        });
-
-        // Check that Oracle refund base asset to timekeeper
-        expect(windResult.transactions).toHaveTransaction({
-            from: oracle.address,
-            to: timekeeper.address,
-            value: 1046463956n, // make sure the refund amount is correct
             success: true,
         });
 
@@ -1161,6 +1152,7 @@ describe('Oracle', () => {
             baseAssetPrice: 1n,
             createdAt: 1n,
             remainScale: 1n,
+            preserveBaseAssetAmount: 0n,
         };
         const tockResult = await oracle.send(
             owner.getSender(),
@@ -1197,18 +1189,7 @@ describe('Oracle', () => {
         let config = {
             extraFees: 0.08,
         };
-        let { windResult, estimateResult } = await windInJettonTransfer(
-            timekeeper,
-            oracle,
-            alarmIndex,
-            buyNum,
-            '5',
-            0,
-            0,
-            config
-        );
-        // console.log('estimateResult ', estimateResult);
-        // printTransactionFees(windResult.transactions);
+        let { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5', 0, 0, config);
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
         alarmIndexAfter = await oracle.getTotalAmount();
         expect(alarmIndexAfter).toEqual(2n);

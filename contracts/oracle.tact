@@ -100,6 +100,7 @@ message Chime {
     baseAssetPrice: Int as uint256;
     createdAt: Int;
     remainScale: Int;
+    preserveBaseAssetAmount: Int; // Tell oracle to preserve exactly this amount of baseAsset
 }
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 100000;
@@ -202,7 +203,7 @@ contract Alarm with Initializable {
             // send refund message back to oracle and exit
             send(SendParameters{
                     to: self.oracleAddress,
-                    value: remainBaseAssetAmount - REFUND_FEE,
+                    value: (remainBaseAssetAmount - REFUND_FEE),
                     mode: SendIgnoreErrors,
                     body: Refund{
                         alarmIndex: self.index,
@@ -226,12 +227,7 @@ contract Alarm with Initializable {
             } else {
                 // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
                 // need ton amount = (buy amount * 2) - the amount you buy from this alarm
-                needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) *
-                        MIN_BASEASSET_TRESHOLD +
-                        self.baseAssetPrice * (msg.buyNum) *
-                        MIN_BASEASSET_TRESHOLD)
-                );
-                // WARNING: needQuoteAssetAmount is always 0 here
+                needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) + self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
                 needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
                 self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
@@ -243,11 +239,7 @@ contract Alarm with Initializable {
             if (self.quoteAssetScale < msg.buyNum) {
                 failed = true;
             } else {
-                needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) *
-                        MIN_BASEASSET_TRESHOLD -
-                        self.baseAssetPrice * (msg.buyNum) *
-                        MIN_BASEASSET_TRESHOLD)
-                );
+                needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) - self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
                 needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
                 // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
                 self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
@@ -259,7 +251,7 @@ contract Alarm with Initializable {
             // send refund message back to oracle and exit
             send(SendParameters{
                     to: self.oracleAddress,
-                    value: remainBaseAssetAmount - REFUND_FEE,
+                    value: (remainBaseAssetAmount - REFUND_FEE),
                     mode: SendIgnoreErrors,
                     body: Refund{
                         alarmIndex: self.index,
@@ -277,7 +269,7 @@ contract Alarm with Initializable {
             // no enough asset to arbitrage, send refund message back to oracle and exit
             send(SendParameters{
                     to: self.oracleAddress,
-                    value: remainBaseAssetAmount - REFUND_FEE,
+                    value: (remainBaseAssetAmount - REFUND_FEE),
                     mode: SendIgnoreErrors,
                     body: Refund{
                         alarmIndex: self.index,
@@ -298,6 +290,7 @@ contract Alarm with Initializable {
         if (self.remainScale > 0) {
             baseAssetPrice = self.baseAssetPrice;
         }
+        dump("????????????");
         send(SendParameters{
                 to: ctx.sender,
                 value: refundBaseAssetAmount,
@@ -310,7 +303,8 @@ contract Alarm with Initializable {
                     refundQuoteAssetAmount: refundQuoteAssetAmount,
                     baseAssetPrice: baseAssetPrice,
                     createdAt: self.createdAt,
-                    remainScale: self.remainScale
+                    remainScale: self.remainScale,
+                    preserveBaseAssetAmount: needBaseAssetAmount
                 }.toCell()
             }
         );
@@ -322,7 +316,7 @@ contract Alarm with Initializable {
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
         let ctx: Context = context();
-        let extraBaseAssetAmount: Int = ctx.value ;//abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
+        let extraBaseAssetAmount: Int = ctx.value; //abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
         send(SendParameters{
                 to: self.oracleAddress,
                 value: 0,
@@ -487,9 +481,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
                 "Insufficient funds to pay for the gas"
             );
-            // TODO: If the requirement above is not satisfied, return the funds and jetton back to the Watchmaker
             nativeReserve(needBaseAssetAmount, 0);
-            // MODIFIED: origin is value:0 mode: SendPayGasSeparately
             let sendBackAmount: Int = ((ctx.value - needBaseAssetAmount) - 2 * (ctx.readForwardFee() + STORAGE_FEE));
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
@@ -516,8 +508,9 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             let alarmIndex: Int = sc.loadUint(256);
             let buyNum: Int = sc.loadUint(32);
             let newBaseAssetPrice: Int = sc.loadUint(256);
-            // Don't we need to add new baseprice? right now the alarm that timekeep build its baseprice is 0
             require(alarmIndex < self.totalAlarms, "alarmIndex out of range");
+            // Send Reset message to Alarm contract. Because we cannot evaluate the ton is sufficient in oracle
+            // so we forward all tons to the alarm contract, but preserve received jettons in the oracle
             send(SendParameters{
                     to: contractAddress(self._calculateAlarmInit(alarmIndex)),
                     value: (ctx.value - STORAGE_FEE),
@@ -549,14 +542,18 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
     }
 
     receive(msg: Chime){
-        // Receive Chime message from Alarm contract
+        // Should Receive Chime message from Alarm contract
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
+        
+        // Preserve exactly the amount of baseAsset
+        nativeReserve(msg.preserveBaseAssetAmount, 0);
+
+        // if remainScale is not 0, then update the price in oracle
         if (msg.remainScale > 0) {
             self.sync(msg.createdAt, msg.baseAssetPrice);
         }
         // Deploy a new alarm contract
-        // WARNING: The new alarm contract is deployed anyway, even if wind is failed
         let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
         send(SendParameters{
                 to: contractAddress(initCode),
@@ -576,13 +573,12 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
         let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
-
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: 0, // MODIFIED: from msg.refundBaseAssetAmount to 0.
-                    mode: SendRemainingValue,
+                    value: 0,
+                    mode: SendRemainingValue + SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
                         amount: msg.refundQuoteAssetAmount,
@@ -597,8 +593,12 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             return ;
         }
         if (standardRefundAmount > 0) {
-            send(SendParameters{to: msg.timeKeeper, value: standardRefundAmount, mode: 0, body: "SlickBack".asComment()}
-            );
+            send(SendParameters{
+                to: msg.timeKeeper, 
+                value: standardRefundAmount,
+                mode: 0, 
+                body: "SlickBack".asComment()
+            });
             return ;
         }
     }
@@ -654,11 +654,11 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         let ctx: Context = context();
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
-            let sendValue: Int = ctx.value - STORAGE_FEE - ctx.readForwardFee();
+            let sendValue: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD ) + sendValue,
+                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + sendValue),
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
@@ -673,10 +673,11 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             );
         } else if (msg.remainBaseAssetScale > 0) {
             //  Refund TON
-            let standardRefundAmount: Int = ((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee() - ton("0.032"));
+            let standardRefundAmount: Int =
+                (((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee()) - ton("0.032"));
             send(SendParameters{
                     to: msg.watchmaker,
-                    value: msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + standardRefundAmount,
+                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + standardRefundAmount),
                     mode: 0,
                     body: "SlickBack".asComment()
                 }
