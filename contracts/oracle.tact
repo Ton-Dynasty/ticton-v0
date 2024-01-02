@@ -104,7 +104,7 @@ message Chime {
 }
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 100000;
-const DEPLOY_FEE: Int = ton("0.05");
+const DEPLOY_FEE: Int = ton("0.055");
 const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
@@ -179,6 +179,7 @@ contract Alarm with Initializable {
         self.baseAssetAmount = msg.scale * MIN_BASEASSET_TRESHOLD;
         self.quoteAssetAmount = int(msg.scale * MIN_BASEASSET_TRESHOLD * msg.baseAssetPrice);
         // Return the remaining funds back to the Watchmaker
+        let ctx: Context = context();
         send(SendParameters{
                 to: self.watchmaker,
                 value: 0,
@@ -290,11 +291,11 @@ contract Alarm with Initializable {
         if (self.remainScale > 0) {
             baseAssetPrice = self.baseAssetPrice;
         }
-        dump("????????????");
+    
         send(SendParameters{
                 to: ctx.sender,
-                value: refundBaseAssetAmount,
-                mode: SendIgnoreErrors,
+                value: 0,
+                mode: SendRemainingValue,
                 body: Chime{
                     alarmIndex: self.index,
                     timeKeeper: msg.sender,
@@ -572,13 +573,13 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         self.totalAlarms = (self.totalAlarms + 1);
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
-        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
+        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee() - DEPLOY_FEE - REFUND_FEE - msg.preserveBaseAssetAmount);
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: 0,
-                    mode: SendRemainingValue + SendPayGasSeparately,
+                    value: standardRefundAmount,
+                    mode: 0,//SendRemainingValue + SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
                         amount: msg.refundQuoteAssetAmount,
@@ -649,8 +650,6 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         if (msg.remainScale > 0) {
             rewardAmount = self.sync(msg.createdAt, msg.baseAssetPrice);
         }
-        // dump(msg.remainQuoteAssetScale);
-        // dump(msg.remainBaseAssetScale);
         let ctx: Context = context();
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {

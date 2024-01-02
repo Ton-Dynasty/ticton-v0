@@ -306,7 +306,10 @@ describe('Oracle', () => {
         const windResult = await timekeeperJettonContract.send(
             timekeeper.getSender(),
             {
-                value: toBigInt(estimateResult.needBaseAsset) + toNano(baseAssetDelta) + BigInt(config?.extraFees ?? GAS_FEE),
+                value:
+                    toBigInt(estimateResult.needBaseAsset) +
+                    toNano(baseAssetDelta) +
+                    BigInt(config?.extraFees ?? GAS_FEE),
             },
             jettonTransfer
         );
@@ -536,8 +539,8 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
-        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5',);
-        printTransactionFees(windResult.transactions);
+        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
+        //printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
@@ -671,6 +674,7 @@ describe('Oracle', () => {
             config
         );
         let balacenceAfter = (await timekeeprWallet.getGetWalletData()).balance;
+        //printTransactionFees(windResult2.transactions);
 
         // Check that oracle send quoteAsset to timekeeper if the needQuoteAssetAmount < 0
         let oralceWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
@@ -703,7 +707,7 @@ describe('Oracle', () => {
         let sendBaseAsset = 2080000000;
         let config = {
             sendBaseAsset: sendBaseAsset,
-            extraFees: 0.08,
+            extraFees: 1,
         };
         let beforeBalance = await timekeeper.getBalance();
         const { windResult, estimateResult } = await windInJettonTransfer(
@@ -1187,7 +1191,7 @@ describe('Oracle', () => {
         let alarmIndex = 0n;
         let buyNum = 1;
         let config = {
-            extraFees: 0.08,
+            extraFees: 1,
         };
         let { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5', 0, 0, config);
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
