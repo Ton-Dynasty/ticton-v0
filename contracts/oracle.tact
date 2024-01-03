@@ -105,7 +105,7 @@ message Chime {
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 100000;
 const DEPLOY_FEE: Int = ton("0.055");
-const STORAGE_FEE: Int = ton("0.007");
+const STORAGE_FEE: Int = ton("0.0184");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
 const REWARD_FEE: Int = ton("0.065");
@@ -479,12 +479,15 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             }
             // Preserve the baseAssetAmount
             let needBaseAssetAmount: Int = int(msg.amount.float().div(baseAssetPrice));
+            
+            let tmp: Int = ctx.readForwardFee();
             require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
-            require(ctx.value > (needBaseAssetAmount + 2 * (ctx.readForwardFee() + STORAGE_FEE)),
+            require(ctx.value > (needBaseAssetAmount + 2 * ctx.readForwardFee() + STORAGE_FEE),
                 "Insufficient funds to pay for the gas"
             );
             nativeReserve(needBaseAssetAmount, 0);
-            let sendBackAmount: Int = ((ctx.value - needBaseAssetAmount) - 2 * (ctx.readForwardFee() + STORAGE_FEE));
+            let sendBackAmount: Int = ctx.value - (needBaseAssetAmount + 2 * ctx.readForwardFee() + STORAGE_FEE);
+
             // Open a new alarm
             let initCode: StateInit = self._calculateAlarmInit(self.totalAlarms);
             send(SendParameters{
@@ -654,7 +657,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         let ctx: Context = context();
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
-            let sendValue: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee() - REWARD_FEE);
+            let sendValue: Int = ((msg.extraBaseAssetAmount  - STORAGE_FEE) - ctx.readForwardFee() - REWARD_FEE) - REFUND_FEE;
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
