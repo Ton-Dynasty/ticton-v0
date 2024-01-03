@@ -579,7 +579,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             send(SendParameters{
                     to: self.quoteAssetWallet,
                     value: standardRefundAmount,
-                    mode: 0,//SendRemainingValue + SendPayGasSeparately,
+                    mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
                         amount: msg.refundQuoteAssetAmount,
@@ -597,7 +597,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             send(SendParameters{
                 to: msg.timeKeeper, 
                 value: standardRefundAmount,
-                mode: 0, 
+                mode: SendPayGasSeparately, 
                 body: "SlickBack".asComment()
             });
             return ;
