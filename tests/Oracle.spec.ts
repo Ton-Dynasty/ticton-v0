@@ -1968,6 +1968,13 @@ describe('Oracle', () => {
 
         let timekeeperBalanceAfter = await timekeeper.getBalance();
         expect(timekeeperBalanceBefore - timekeeperBalanceAfter).toBeGreaterThan(toNano('1.5')); // 1 ton is selled to watchmaker, 0.5 ton is for tx fee
+        let timekeeperRewardWallet = await oracle.getGetWalletAddress(timekeeper.address);
+        let timekeeperRewardWalletContract = blockchain.openContract(
+            await RewardJettonWallet.fromAddress(timekeeperRewardWallet)
+        );
+        let timekeeperRewardWalletData = await timekeeperRewardWalletContract.getGetWalletData();
+        let timekeeperRewardBalance = timekeeperRewardWalletData.balance;
+        expect(timekeeperRewardBalance).toEqual(60000000n);
     });
 
     it('Ring Test: Should reward watchmaker after ring', async () => {
