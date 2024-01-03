@@ -108,6 +108,7 @@ const DEPLOY_FEE: Int = ton("0.055");
 const STORAGE_FEE: Int = ton("0.007");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
+const REWARD_FEE: Int = ton("0.065");
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
 const TIMEPACE: Int = 60; // 1 minutes
 
@@ -407,7 +408,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         require(self.is_initialized == false, "Already initialized");
         require(sender() == self.owner, "Only owner can initialize");
         require(msg.baseAssetWallet == newAddress(0, 0), "Only support TON as baseAsset");
-        self.owner = sender();
+        self.owner = myAddress();
         self.is_initialized = true;
         self.baseAssetWallet = msg.baseAssetWallet;
         self.quoteAssetWallet = msg.quoteAssetWallet;
@@ -653,11 +654,11 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         let ctx: Context = context();
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
-            let sendValue: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
+            let sendValue: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee() - REWARD_FEE);
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
-                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + sendValue),
+                    value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + sendValue ),
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
@@ -673,7 +674,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         } else if (msg.remainBaseAssetScale > 0) {
             //  Refund TON
             let standardRefundAmount: Int =
-                (((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee()) - REFUND_FEE);
+                (((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee()) - REFUND_FEE - REWARD_FEE);
             send(SendParameters{
                     to: msg.watchmaker,
                     value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + standardRefundAmount),
@@ -682,22 +683,22 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                 }
             );
         }
-        // TODO: Uncomment this after the reward token is ready
-        // if (rewardAmount > 0) {
-        //     send(SendParameters{
-        //             to: myAddress(),
-        //             value: 0,
-        //             body: JettonMint{
-        //                 origin: myAddress(),
-        //                 receiver: msg.watchmaker,
-        //                 amount: rewardAmount,
-        //                 custom_payload: null,
-        //                 forward_ton_amount: 0,
-        //                 forward_payload: emptySlice()
-        //             }.toCell()
-        //         }
-        //     );
-        // }
+        if (rewardAmount > 0) {
+            send(SendParameters{
+                    to: myAddress(),
+                    value: REWARD_FEE,
+                    mode: SendPayGasSeparately,
+                    body: JettonMint{
+                        origin: myAddress(),
+                        receiver: msg.watchmaker,
+                        amount: rewardAmount * 1000000,
+                        custom_payload: null,
+                        forward_ton_amount: 0,
+                        forward_payload: emptySlice()
+                    }.toCell()
+                }
+            );
+        }
     }
 
     // Sync the price and return the reward
