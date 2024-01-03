@@ -1,3 +1,4 @@
+import { watch } from 'fs';
 import { Alarm } from '../build/Oracle/tact_Alarm';
 import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
 import { Address, Cell, beginCell, toNano } from 'ton-core';
@@ -8,6 +9,7 @@ import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet'
 import Decimal from 'decimal.js';
 import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
+import { RewardJettonWallet } from '../build/Oracle/tact_RewardJettonWallet';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
@@ -1897,7 +1899,7 @@ describe('Oracle', () => {
         );
 
         // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('0.84')); // it won't be exactly 1 because of the transaction fee
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('0.78')); // it won't be exactly 1 because of the transaction fee
     });
 
     it('Ring Test: Should return remaining funds back to Watchmaker (If msg.remainBaseAssetScale > 0)', async () => {
@@ -1945,7 +1947,53 @@ describe('Oracle', () => {
         let balanceAfter = await watchmaker.getBalance();
 
         // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('2') - toNano('0.06')); // it won't be exactly 2 because of the transaction fee
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('2') - toNano('0.13')); // it won't be exactly 2 because of the transaction fee
         expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('1.99')); // This 1.99 ton is timekeeper's baseAsset
+    });
+
+    it('Ring Test: Should reward watchmaker after ring', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+
+        // watchmaker post price to oracle
+        const quoteAssetToTransfer1 = 3; // 1 ton = 3usdt
+
+        await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
+
+        // Check that alarm count is 1
+        let alarmIndexAfter = await oracle.getTotalAmount();
+        expect(alarmIndexAfter).toEqual(1n);
+
+        // Watchmaker should send ring msg to oracle
+        let alarmIndex = 0n;
+
+        // wait for 100 seconds on the blockchain
+        blockchain.now = blockchain.now!! + 100;
+
+        // Watchmaker send ring msg to oracle
+        let ring: Ring = {
+            $$type: 'Ring',
+            queryID: 0n,
+            alarmIndex: alarmIndex,
+        };
+
+        await oracle.send(
+            watchmaker.getSender(),
+            {
+                value: toNano('10'),
+            },
+            ring
+        );
+
+        // Check that watchmaker get the reward token
+        let watchmakerRewardWallet = await oracle.getGetWalletAddress(watchmaker.address);
+        let watchmakerRewardWalletContract = blockchain.openContract(
+            await RewardJettonWallet.fromAddress(watchmakerRewardWallet)
+        );
+        let watchmakerRewardWalletData = await watchmakerRewardWalletContract.getGetWalletData();
+        expect(watchmakerRewardWalletData.balance).toEqual(60000000n);
     });
 });
