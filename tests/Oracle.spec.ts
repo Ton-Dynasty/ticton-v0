@@ -1898,9 +1898,8 @@ describe('Oracle', () => {
             5
         );
 
-        //console.log('balanceAfter - balanceBefore', balanceAfter - balanceBefore);
         // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceBefore - balanceAfter).toBeGreaterThan(toNano('0.469')); // it won't be exactly 1 because of the transaction fee
+        expect(balanceBefore - balanceAfter).toBeGreaterThan(toNano('0.469')); // it cost watchmaker to 0.469 ton to tick a price
     });
 
     it('Ring Test: Should return remaining funds back to Watchmaker (If msg.remainBaseAssetScale > 0)', async () => {
@@ -1913,6 +1912,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const quoteAssetToTransfer1 = 8; // 2usdt
 
+        let balanceBefore = await watchmaker.getBalance();
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
 
         // Check that alarm count is 1
@@ -1923,6 +1923,7 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
+        let timekeeperBalanceBefore = await timekeeper.getBalance();
         const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
 
         // Watchmaker should send ring msg to oracle
@@ -1930,14 +1931,14 @@ describe('Oracle', () => {
         // Wait for 100 seconds on the blockchain
         blockchain.now = blockchain.now!! + 100;
 
-        let balanceBefore = await watchmaker.getBalance();
-
         // Watchmaker send ring msg to oracle
         let ring: Ring = {
             $$type: 'Ring',
             queryID: 0n,
             alarmIndex: alarmIndex,
         };
+
+        blockchain.now = blockchain.now!! + 100;
         await oracle.send(
             watchmaker.getSender(),
             {
@@ -1946,26 +1947,40 @@ describe('Oracle', () => {
             ring
         );
         let balanceAfter = await watchmaker.getBalance();
-        //console.log('alanceAfter - balanceBefore', balanceAfter - balanceBefore);
 
         // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('2') - toNano('0.14')); // it won't be exactly 2 because of the transaction fee
-        expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('1.99')); // This 1.99 ton is timekeeper's baseAsset
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('1') - toNano('0.469')); // it won't be exactly 2 because of the transaction fee
+        expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('2')); // This 1.99 ton is timekeeper's baseAsset
+
+        alarmIndex = 1n;
+        let ring2: Ring = {
+            $$type: 'Ring',
+            queryID: 0n,
+            alarmIndex: alarmIndex,
+        };
+        let ringResult = await oracle.send(
+            timekeeper.getSender(),
+            {
+                value: toNano('10'),
+            },
+            ring2
+        );
+
+        let timekeeperBalanceAfter = await timekeeper.getBalance();
+        expect(timekeeperBalanceBefore - timekeeperBalanceAfter).toBeGreaterThan(toNano('1.5')); // 1 ton is selled to watchmaker, 0.5 ton is for tx fee
     });
 
     it('Ring Test: Should reward watchmaker after ring', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
-
+        let oracleBalance = await oracle.getGetMyBalance();
         // Mint tokens to watchmaker
         await mintToken(jettonMaster, watchmaker);
 
         // watchmaker post price to oracle
         const quoteAssetToTransfer1 = 3; // 1 ton = 3usdt
 
-        //console.log('oracle balance 0:', await oracle.getGetMyBalance());
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
-        //console.log('oracle balance 1:', await oracle.getGetMyBalance());
 
         // Check that alarm count is 1
         let alarmIndexAfter = await oracle.getTotalAmount();
@@ -1998,9 +2013,9 @@ describe('Oracle', () => {
             await RewardJettonWallet.fromAddress(watchmakerRewardWallet)
         );
         let watchmakerRewardWalletData = await watchmakerRewardWalletContract.getGetWalletData();
+        let watchmakerRewardBalance = watchmakerRewardWalletData.balance;
         expect(watchmakerRewardWalletData.balance).toEqual(60000000n);
         // watchmaker post price to oracle
-        //console.log('oracle balance 2.0:', await oracle.getGetMyBalance());
         const quoteAssetToTransfer2 = 3; // 1 ton = 3usdt
         let tickResult = await tickInJettonTransfer(
             watchmaker,
@@ -2011,12 +2026,6 @@ describe('Oracle', () => {
             2,
             2n
         );
-        // console.log('oracle balance 2:', await oracle.getGetMyBalance());
-        // console.log('-------');
-        // printTransactionFees(tickResult.transactions);
-        let alarm1Address = await oracle.getGetAlarmAddress(1n);
-        // let alarm1Contract = blockchain.openContract(await Alarm.fromAddress(alarm1Address));
-        // console.log('base price:', await alarm1Contract.getGetBaseAssetPrice());
         let alarmIndex2 = 1n;
 
         // wait for 100 seconds on the blockchain
@@ -2036,10 +2045,10 @@ describe('Oracle', () => {
             },
             ring2
         );
-        //console.log('oracle balance 3:', await oracle.getGetMyBalance());
-        //printTransactionFees(ringResult.transactions);
         watchmakerRewardWalletData = await watchmakerRewardWalletContract.getGetWalletData();
-        //console.log('watchmakerRewardWalletData.balance2', watchmakerRewardWalletData.balance);
-        //printTransactionFees(ringResult.transactions);
+        let watchmakerRewardBalanceAfter = watchmakerRewardWalletData.balance;
+        expect(watchmakerRewardBalanceAfter).toEqual(watchmakerRewardBalance + 1000000n);
+        let oracleBalanceAfter = await oracle.getGetMyBalance();
+        expect(oracleBalanceAfter - oracleBalance).toBeGreaterThan(224000n); // Oracle's balance is sligjtly increased
     });
 });

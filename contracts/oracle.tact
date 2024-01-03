@@ -109,6 +109,7 @@ const STORAGE_FEE: Int = ton("0.0184");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
 const REWARD_FEE: Int = ton("0.065");
+const TRANSFER_FEE: Int = ton("0.02");
 const MIN_BASEASSET_TRESHOLD: Int = ton("1"); // 1 ton
 const TIMEPACE: Int = 60; // 1 minutes
 
@@ -657,7 +658,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         let ctx: Context = context();
         // Transfer the remaining funds and rewards to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
-            let sendValue: Int = ((msg.extraBaseAssetAmount  - STORAGE_FEE) - ctx.readForwardFee() - REWARD_FEE) - REFUND_FEE;
+            let sendValue: Int = ((msg.extraBaseAssetAmount  - STORAGE_FEE) - ctx.readForwardFee() - REWARD_FEE) - REFUND_FEE - TRANSFER_FEE;
             // The remain quote token is calculated by the formula:
             send(SendParameters{
                     to: self.quoteAssetWallet,
