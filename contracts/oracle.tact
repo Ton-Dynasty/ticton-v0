@@ -673,7 +673,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         } else if (msg.remainBaseAssetScale > 0) {
             //  Refund TON
             let standardRefundAmount: Int =
-                (((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee()) - ton("0.032"));
+                (((msg.extraBaseAssetAmount - STORAGE_FEE) - ctx.readForwardFee()) - REFUND_FEE);
             send(SendParameters{
                     to: msg.watchmaker,
                     value: (msg.remainBaseAssetScale * MIN_BASEASSET_TRESHOLD + standardRefundAmount),
