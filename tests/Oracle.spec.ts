@@ -8,8 +8,6 @@ import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet'
 import Decimal from 'decimal.js';
 import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
-import { watch } from 'fs';
-import exp from 'constants';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
