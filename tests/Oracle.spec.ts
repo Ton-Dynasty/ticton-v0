@@ -9,6 +9,7 @@ import Decimal from 'decimal.js';
 import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
 import { watch } from 'fs';
+import exp from 'constants';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
@@ -530,7 +531,14 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, watchmaker);
         // watchmaker post price to oracle
         const quoteAssetToTransfer1 = 4; // 4usdt
+        let oracleBalanceBefore = await oracle.getGetMyBalance();
+        let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+        let oracleJettonContract = blockchain.openContract(await ExampleJettonWallet.fromAddress(oracleWalletAddress));
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
+        let orcleJettonBalanceAfter = (await oracleJettonContract.getGetWalletData()).balance;
+        let oracleBalanceAfter = await oracle.getGetMyBalance();
+        expect(oracleBalanceAfter - oracleBalanceBefore).toBeGreaterThan(toNano('0.99')); // This 0.99 ton is the watchmaker's deposit base asset
+        expect(orcleJettonBalanceAfter).toEqual(4000000n); // This 4 USDT is the watchmaker's deposit quote asset
         // Check that alarm count is 1
         let alarmIndexAfter = await oracle.getTotalAmount();
         expect(alarmIndexAfter).toEqual(1n);
@@ -539,7 +547,13 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
+        let orcleJettonBalanceBefore = (await oracleJettonContract.getGetWalletData()).balance;
         const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
+        orcleJettonBalanceAfter = (await oracleJettonContract.getGetWalletData()).balance;
+        oracleBalanceAfter = await oracle.getGetMyBalance();
+        oracleBalanceAfter = await oracle.getGetMyBalance();
+        expect(oracleBalanceAfter).toBeGreaterThan(toNano('1.99')); // This 1.99 ton is the timekeeper's deposit base asset
+        expect(orcleJettonBalanceAfter - orcleJettonBalanceBefore).toEqual(13999999n); // This 10 USDT is the timekeeper's deposit quote asset , 4 USDT is the amount that timekeeper buy watchmaker's base asset
         //printTransactionFees(windResult.transactions);
 
         // watchmaker's jetton wallet address
@@ -552,7 +566,6 @@ describe('Oracle', () => {
             success: true,
         });
 
-        const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
         // Check that timekeeper's jetton wallet send JettonInternalTransfer msg to oracle's jetton wallet
         expect(windResult.transactions).toHaveTransaction({
             from: timekeeperWalletAddress,
@@ -1216,7 +1229,6 @@ describe('Oracle', () => {
         let { windResult: windResult2 } = await windInJettonTransfer(timekeeper2, oracle, alarmIndex2, buyNum2, '6');
         //printTransactionFees(windResult2.transactions);
         let timekeeperWalletAddress2 = await jettonMaster.getGetWalletAddress(timekeeper2.address);
-        let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
 
         // Check that after timekeeper wind and he didn't buy all assets, the LatestBaseAssetPrice will be update to the price that miner set
         let latestPrice = await oracle.getGetLatestBaseAssetPrice();
@@ -1708,7 +1720,7 @@ describe('Oracle', () => {
         // Watchmaker should send ring msg to oracle
         let alarmIndex = 0n;
 
-        // TODO: wait for 100 seconds on the blockchain
+        // wait for 100 seconds on the blockchain
         blockchain.now = blockchain.now!! + 100;
 
         // Watchmaker send ring msg to oracle
@@ -1775,7 +1787,7 @@ describe('Oracle', () => {
         let remainScale = await alarmContract.getGetRemainScale();
         expect(remainScale).toEqual(0n);
 
-        // TODO: wait for 100 seconds on the blockchain
+        // wait for 100 seconds on the blockchain
         blockchain.now = blockchain.now!! + 100;
 
         // Watchmaker send ring msg to oracle
@@ -1943,7 +1955,7 @@ describe('Oracle', () => {
             queryID: 0n,
             alarmIndex: alarmIndex,
         };
-        let ringResult = await oracle.send(
+        await oracle.send(
             watchmaker.getSender(),
             {
                 value: toNano('10'),
@@ -1957,7 +1969,7 @@ describe('Oracle', () => {
         //printTransactionFees(ringResult.transactions);
 
         // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('2') - toNano('0.072')); // it won't be exactly 2 because of the transaction fee
-        expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('1.928')); // This 1.99 ton is timekeeper's baseAsset
+        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('2') - toNano('0.06')); // it won't be exactly 2 because of the transaction fee
+        expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('1.99')); // This 1.99 ton is timekeeper's baseAsset
     });
 });
