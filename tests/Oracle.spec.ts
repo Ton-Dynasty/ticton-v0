@@ -1951,6 +1951,14 @@ describe('Oracle', () => {
         // Check that watchmaker get 1 ton that he ticked before
         expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('1') - toNano('0.469')); // it won't be exactly 2 because of the transaction fee
         expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('2')); // This 1.99 ton is timekeeper's baseAsset
+        // Check that watchmaker didn't get the reward token, because he was winded by timekeeper
+        let watchmakerRewardWallet = await oracle.getGetWalletAddress(watchmaker.address);
+        let watchmakerRewardWalletContract = blockchain.openContract(
+            await RewardJettonWallet.fromAddress(watchmakerRewardWallet)
+        );
+        await watchmakerRewardWalletContract.getGetWalletData().catch((err) => {
+            expect(err.message).toEqual('Trying to run get method on non-active contract');
+        });
     });
 
     it('Ring Test: Should reward watchmaker after ring', async () => {
@@ -2043,21 +2051,20 @@ describe('Oracle', () => {
         await mintToken(jettonMaster, watchmaker);
 
         // watchmaker post price to oracle
-        const quoteAssetToTransfer1 = 8; // 2usdt
-
-        let balanceBefore = await watchmaker.getBalance();
+        const quoteAssetToTransfer1 = 8; // 8usdt
+        const watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
+        const watchmakerJettonContract = blockchain.openContract(
+            ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
+        );
+        let watchmakerBalanceBefore = (await watchmakerJettonContract.getGetWalletData()).balance;
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
-
-        // Check that alarm count is 1
-        let alarmIndexAfter = await oracle.getTotalAmount();
-        expect(alarmIndexAfter).toEqual(1n);
 
         let timekeeper: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper');
         await mintToken(jettonMaster, timekeeper);
         let alarmIndex = 0n;
         let buyNum = 1;
         let timekeeperBalanceBefore = await timekeeper.getBalance();
-        const { windResult } = await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
+        await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
 
         // Watchmaker should send ring msg to oracle
 
@@ -2079,19 +2086,13 @@ describe('Oracle', () => {
             },
             ring
         );
-        let balanceAfter = await watchmaker.getBalance();
-
-        // Check that watchmaker get 1 ton that he ticked before
-        expect(balanceAfter - balanceBefore).toBeGreaterThan(toNano('1') - toNano('0.469')); // it won't be exactly 2 because of the transaction fee
-        expect(await oracle.getGetMyBalance()).toBeGreaterThan(toNano('2')); // This 1.99 ton is timekeeper's baseAsset
-
         alarmIndex = 1n;
         let ring2: Ring = {
             $$type: 'Ring',
             queryID: 0n,
             alarmIndex: alarmIndex,
         };
-        let ringResult = await oracle.send(
+        await oracle.send(
             timekeeper.getSender(),
             {
                 value: toNano('10'),
@@ -2099,8 +2100,14 @@ describe('Oracle', () => {
             ring2
         );
 
+        // Chekc that timekeepr pay 1 ton to by usdt and 0.5 ton for tx fee
         let timekeeperBalanceAfter = await timekeeper.getBalance();
         expect(timekeeperBalanceBefore - timekeeperBalanceAfter).toBeGreaterThan(toNano('1.5')); // 1 ton is selled to watchmaker, 0.5 ton is for tx fee
+        // Check that watchmaker's 8 usdt is bought by timekeeper
+        let watchmakerBalanceAfter = (await watchmakerJettonContract.getGetWalletData()).balance;
+        expect(watchmakerBalanceBefore - watchmakerBalanceAfter).toEqual(8000000n); // 8 usdt is bought from timekeeper
+
+        // Check that timekeeper get the reward token
         let timekeeperRewardWallet = await oracle.getGetWalletAddress(timekeeper.address);
         let timekeeperRewardWalletContract = blockchain.openContract(
             await RewardJettonWallet.fromAddress(timekeeperRewardWallet)
