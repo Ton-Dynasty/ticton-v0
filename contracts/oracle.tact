@@ -104,7 +104,7 @@ message Chime {
 }
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 100000;
-const DEPLOY_FEE: Int = ton("0.055");
+const DEPLOY_FEE: Int = ton("0.05");
 const STORAGE_FEE: Int = ton("0.0184");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
@@ -578,7 +578,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         self.totalAlarms = (self.totalAlarms + 1);
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
-        let standardRefundAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee() - DEPLOY_FEE - REFUND_FEE - msg.preserveBaseAssetAmount);
+        let standardRefundAmount: Int = ((ctx.value) - ctx.readForwardFee() - DEPLOY_FEE - REFUND_FEE - msg.preserveBaseAssetAmount);
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{

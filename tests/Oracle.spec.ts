@@ -2040,13 +2040,13 @@ describe('Oracle', () => {
         let watchmakerRewardBalanceAfter = watchmakerRewardWalletData.balance;
         expect(watchmakerRewardBalanceAfter).toEqual(watchmakerRewardBalance + 1000000n);
         let oracleBalanceAfter = await oracle.getGetMyBalance();
-        expect(oracleBalanceAfter - oracleBalance).toBeGreaterThan(224000n); // Oracle's balance is sligjtly increased
+        expect(oracleBalanceAfter - oracleBalance).toBeGreaterThan(0n); // Oracle's balance is sligjtly increased
     });
 
     it('Ring Test: Should timekeeper ring his alarm and get the reward', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
-
+        let oracleBalance = await oracle.getGetMyBalance();
         // Mint tokens to watchmaker
         await mintToken(jettonMaster, watchmaker);
 
@@ -2099,10 +2099,12 @@ describe('Oracle', () => {
             },
             ring2
         );
+        let oracleBalanceAfter = await oracle.getGetMyBalance();
 
-        // Chekc that timekeepr pay 1 ton to by usdt and 0.5 ton for tx fee
+        // Chekc that timekeepr pay 1 ton to by usdt and 0.48 ton for tx fee
         let timekeeperBalanceAfter = await timekeeper.getBalance();
-        expect(timekeeperBalanceBefore - timekeeperBalanceAfter).toBeGreaterThan(toNano('1.5')); // 1 ton is selled to watchmaker, 0.5 ton is for tx fee
+
+        expect(timekeeperBalanceBefore - timekeeperBalanceAfter).toBeGreaterThan(toNano('1.48')); // 1 ton is selled to watchmaker, 0.48 ton is for tx fee
         // Check that watchmaker's 8 usdt is bought by timekeeper
         let watchmakerBalanceAfter = (await watchmakerJettonContract.getGetWalletData()).balance;
         expect(watchmakerBalanceBefore - watchmakerBalanceAfter).toEqual(8000000n); // 8 usdt is bought from timekeeper
@@ -2115,5 +2117,6 @@ describe('Oracle', () => {
         let timekeeperRewardWalletData = await timekeeperRewardWalletContract.getGetWalletData();
         let timekeeperRewardBalance = timekeeperRewardWalletData.balance;
         expect(timekeeperRewardBalance).toEqual(60000000n);
+        expect(oracleBalanceAfter - oracleBalance).toBeGreaterThan(0n); // Oracle's balance is sligjtly increased
     });
 });
