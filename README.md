@@ -4,6 +4,8 @@
 - [Tic Ton Oracle](#tic-ton-oracle)
   - [Table of Contents](#table-of-contents)
   - [What is Tic Ton Oracle?](#what-is-tic-ton-oracle)
+  - [Motivation](#motivation)
+  - [Core Concepts](#core-concepts)
   - [The benefits of  Tic Ton Oracle](#the-benefits-of--tic-ton-oracle)
     - [High Transactions per second in TON:](#high-transactions-per-second-in-ton)
     - [Decentralization](#decentralization)
@@ -24,6 +26,12 @@
 
 ## What is Tic Ton Oracle?
 Tic Ton oracle stands as the premier fully decentralized oracle on the TON platform. Diverging from market-standard final prices set by price providers, it employs Game Theory to craft a decentralized network of non-cooperative games. This network ascertains the ultimate price via mechanisms of arbitrage and bidirectional options, incorporating the chain with random data from decentralized price streams.
+
+## Motivation
+Inspired by Uniswap's oracle, we believe that a **true oracle should generate prices directly on-chain**, rather than merely uploading pre-processed off-chain data. Oracles should be **decentralized**, not reliant on centralized data providers, and possess the ability to withstand attacks, instead of depending solely on the reputation of data sources. Moreover, an effective oracle should be capable of **supporting large-scale transactions**, not just dependent on the capacity of data providers.
+
+## Core Concepts
+![Alt text](./image/core.png)
 
 ## The benefits of  Tic Ton Oracle
 When contrasted with traditional price feed systems, Tic Ton Oracle boasts several key benefits:
