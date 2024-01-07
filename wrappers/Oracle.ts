@@ -1,1 +1,1 @@
-export * from '../build/Oracle/tact_Oracle';
+export * from '../build/Oracle/tact_OracleV0';

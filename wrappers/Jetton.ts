@@ -1,1 +1,1 @@
-export * from '../build/Jetton/tact_Jetton';
+export * from '../build/Jetton/tact_ExampleJettonMaster';
