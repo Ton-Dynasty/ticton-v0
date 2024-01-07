@@ -103,7 +103,7 @@ message Chime {
     preserveBaseAssetAmount: Int; // Tell oracle to preserve exactly this amount of baseAsset
 }
 const BASEASSET_DECIMALS: Int = 1000000000;
-const QUOTEASSET_DECIMALS: Int = 100000;
+const QUOTEASSET_DECIMALS: Int = 1000000;
 const DEPLOY_FEE: Int = ton("0.05");
 const STORAGE_FEE: Int = ton("0.0184");
 const CHECK_FEE: Int = ton("0.001");
@@ -695,7 +695,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                     body: JettonMint{
                         origin: myAddress(),
                         receiver: msg.watchmaker,
-                        amount: rewardAmount * 1000000,
+                        amount: rewardAmount,
                         custom_payload: null,
                         forward_ton_amount: 0,
                         forward_payload: emptySlice()
@@ -722,12 +722,12 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         if (self.latestTimestamp == 0) {
             self.latestTimestamp = timestamp;
             self.latestBaseAssetPrice = baseAssetPrice;
-            return TIMEPACE;
+            return TIMEPACE * QUOTEASSET_DECIMALS;
         }
         self.latestBaseAssetPrice = (9 * self.latestBaseAssetPrice + baseAssetPrice) / 10;
         let reward: Int = (timestamp - self.latestTimestamp) / TIMEPACE;
         if (reward > 0) {
-            return reward;
+            return reward  * QUOTEASSET_DECIMALS;
         }
         return 0;
     }
