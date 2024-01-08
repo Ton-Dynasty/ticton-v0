@@ -340,8 +340,6 @@ describe('Oracle', () => {
                 queryId: 0n,
             }
         );
-        let oracleBalanceBefore = await oracle.getGetMyBalance();
-        //console.log('oracleBalanceBefore', oracleBalanceBefore);
         expect(deployResult.transactions).toHaveTransaction({
             from: owner.address,
             to: oracle.address,

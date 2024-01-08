@@ -5,7 +5,7 @@ import { NetworkProvider } from '@ton-community/blueprint';
 export async function run(provider: NetworkProvider) {
     // null address represents ton coin
     const nullAddress: Address = new Address(0, Buffer.alloc(32));
-    const quoteAsset: Address = nullAddress;
+    const {address: quoteAsset} = Address.parseFriendly("EQBqSpvo4S87mX9tjHaG4zhYZeORhVhMapBJpnMZ64jhrEQK");
     const oracle = provider.open(await OracleV0.fromInit(nullAddress, quoteAsset));
 
     await oracle.send(
