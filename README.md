@@ -48,7 +48,7 @@ Tic Ton oracle empowers all participants to contribute to and shape the price fo
 ## How is the Tic Ton Oracle operated?
 
 ### Architecture
-![Alt text](./image/architecture.jpg)
+![Alt text](./image/architecture.png)
 
 ### In-Depth Architecture Breakdown
 **You can envision the Tic Ton Oracle  as the story below:**
@@ -73,7 +73,7 @@ Protocols can retrieve prices from Tic Ton Oracle while paying some basic fees.
 
 ### Summary
 
-![Alt text](./image/summary.jpg)
+![Alt text](./image/summary.png)
 
 
 ## Project structure
