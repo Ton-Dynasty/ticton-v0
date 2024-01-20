@@ -1546,6 +1546,43 @@ describe('Oracle', () => {
         });
     });
 
+    it('Ring Test: Should watchmaker can ring his alarm', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const quoteAssetToTransfer1 = 10; // 10usdt
+        await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
+        // Check that alarm count is 1
+        let alarmIndexAfter = await oracle.getTotalAmount();
+        expect(alarmIndexAfter).toEqual(1n);
+        // Watchmaker should send ring msg to oracle
+        let alarmIndex = 0n;
+        let ring: Ring = {
+            $$type: 'Ring',
+            queryID: 0n,
+            alarmIndex: alarmIndex,
+        };
+        let timekeeper: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper');
+        let ringResult = await oracle.send(
+            timekeeper.getSender(),
+            {
+                value: toNano('10'),
+            },
+            ring
+        );
+
+        // Check that oracle send Mute msg to corresponding Alarm contract
+        let alarmAddress = await oracle.getGetAlarmAddress(alarmIndex);
+        expect(ringResult.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: alarmAddress,
+            success: false,
+            exitCode: 23469, // Only watchmaker can ring his alarm
+        });
+    });
+
     it('Ring Test: Should failed if Mute message is not from oracle', async () => {
         // Initialize oracle
         await initializeOracle(oracle, owner);
@@ -1572,6 +1609,7 @@ describe('Oracle', () => {
         let mute: Mute = {
             $$type: 'Mute',
             queryID: 0n,
+            watchmaker: timekeeper.address,
         };
         let muteResult = await alarmContract.send(
             timekeeper.getSender(),

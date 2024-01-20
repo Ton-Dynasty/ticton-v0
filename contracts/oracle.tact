@@ -68,6 +68,7 @@ message Ring {
 }
 message Mute {
     queryID: Int;
+    watchmaker: Address;
 }
 message Check {
     queryID: Int;
@@ -319,6 +320,7 @@ contract Alarm with Initializable {
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
         let ctx: Context = context();
+        require(msg.watchmaker == self.watchmaker, "Only watchmaker can mute an alarm");
         let extraBaseAssetAmount: Int = ctx.value; //abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
         send(SendParameters{
                 to: self.oracleAddress,
@@ -538,11 +540,15 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         // Watchmaker sends Ring message to Mute a specific alarm
         require(msg.alarmIndex < self.totalAlarms, "alarmIndex out of range");
         let alarmAddress: Address = self.getAlarmAddress(msg.alarmIndex);
+        
         send(SendParameters{
                 to: alarmAddress,
                 value: 0,
                 mode: SendRemainingValue,
-                body: Mute{queryID: msg.queryID}.toCell()
+                body: Mute{
+                    queryID: msg.queryID,
+                    watchmaker: sender()
+                }.toCell()
             }
         );
     }
