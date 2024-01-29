@@ -103,10 +103,28 @@ message Chime {
     remainScale: Int;
     preserveBaseAssetAmount: Int; // Tell oracle to preserve exactly this amount of baseAsset
 }
+
+struct EstimateResult {
+    canBuy: Bool;
+    needBaseAssetAmount: Int;
+    needQuoteAssetAmount: Int;
+} 
+
+struct OracleMetadata {
+    base_asset_address: Address;
+    quote_asset_address: Address;
+    base_asset_decimals: Int;
+    quote_asset_decimals: Int;
+    min_base_asset_threshold: Int;
+    base_asset_wallet_address: Address;
+    quote_asset_wallet_address: Address;
+    is_initialized: Bool;
+}
+
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 1000000;
 const DEPLOY_FEE: Int = ton("0.05");
-const STORAGE_FEE: Int = ton("0.0184");
+const STORAGE_FEE: Int = ton("0.01841");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
 const REWARD_FEE: Int = ton("0.065");
@@ -361,6 +379,32 @@ contract Alarm with Initializable {
 
     get fun getBaseAssetPrice(): Int {
         return self.baseAssetPrice;
+    }
+
+    get fun getEstimate(buyNum: Int, newBaseAssetPrice: Int): EstimateResult {
+        let needBaseAssetAmount: Int = 0;
+        let needQuoteAssetAmount: Int = 0;
+        let canBuy: Bool = true;
+        if (self.remainScale < buyNum || self.baseAssetScale < buyNum || self.quoteAssetScale < buyNum) {
+            canBuy = false;
+        }
+        else {
+            if (newBaseAssetPrice > self.baseAssetPrice) {
+                // Buy baseAsset
+                needQuoteAssetAmount = int((newBaseAssetPrice * (buyNum << 1) + self.baseAssetPrice * buyNum) * MIN_BASEASSET_TRESHOLD);
+                needBaseAssetAmount = buyNum * MIN_BASEASSET_TRESHOLD;
+                
+            } else {
+                // Buy quoteAsset
+                needQuoteAssetAmount = int((newBaseAssetPrice * (buyNum << 1) - self.baseAssetPrice * buyNum) * MIN_BASEASSET_TRESHOLD);
+                needBaseAssetAmount = buyNum * 3 * MIN_BASEASSET_TRESHOLD;
+            }
+        }
+        return EstimateResult{
+            canBuy: canBuy,
+            needBaseAssetAmount: needBaseAssetAmount,
+            needQuoteAssetAmount: needQuoteAssetAmount
+        };
     }
 }
 
@@ -757,5 +801,22 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
 
     get fun getMyBalance(): Int {
         return myBalance();
+    }
+
+    get fun getBaseWallet(): Address {
+        return self.baseAssetWallet;
+    }
+
+    get fun getOracleMetaData(): OracleMetadata {
+        return OracleMetadata {
+            base_asset_address: self.baseAsset,
+            quote_asset_address: self.quoteAsset,
+            base_asset_decimals: 9,
+            quote_asset_decimals: 6,
+            min_base_asset_threshold: MIN_BASEASSET_TRESHOLD,
+            base_asset_wallet_address: self.baseAssetWallet,
+            quote_asset_wallet_address: self.quoteAssetWallet,
+            is_initialized: self.is_initialized
+        };
     }
 }
