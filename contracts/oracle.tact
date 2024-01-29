@@ -251,10 +251,6 @@ contract Alarm with Initializable {
                 // need ton amount = (buy amount * 2) - the amount you buy from this alarm
                 needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) + self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
                 needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
-                // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
-                self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
-                self.quoteAssetScale = (self.quoteAssetScale + msg.buyNum);
-                self.remainScale = (self.remainScale - msg.buyNum);
             }
         } else {
             // Buy quoteAsset, put baseAsset into the alarm
@@ -263,10 +259,6 @@ contract Alarm with Initializable {
             } else {
                 needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) - self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
                 needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
-                // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
-                self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
-                self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
-                self.remainScale = (self.remainScale - msg.buyNum);
             }
         }
         if (failed) {
@@ -312,7 +304,6 @@ contract Alarm with Initializable {
         if (self.remainScale > 0) {
             baseAssetPrice = self.baseAssetPrice;
         }
-    
         send(SendParameters{
                 to: ctx.sender,
                 value: 0,
@@ -330,6 +321,18 @@ contract Alarm with Initializable {
                 }.toCell()
             }
         );
+        // Update scales if all actions successfully
+        if (msg.newBaseAssetPrice > self.baseAssetPrice) {
+            // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
+            self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
+            self.quoteAssetScale = (self.quoteAssetScale + msg.buyNum);
+            self.remainScale = (self.remainScale - msg.buyNum);
+        } else {
+             // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
+            self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
+            self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
+            self.remainScale = (self.remainScale - msg.buyNum);
+        }
     }
 
     receive(msg: Mute){
