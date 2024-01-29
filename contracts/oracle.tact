@@ -807,7 +807,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         return self.baseAssetWallet;
     }
 
-    get fun getOracleMetaData(): OracleMetadata {
+    get fun getOracleData(): OracleMetadata {
         return OracleMetadata {
             base_asset_address: self.baseAsset,
             quote_asset_address: self.quoteAsset,
