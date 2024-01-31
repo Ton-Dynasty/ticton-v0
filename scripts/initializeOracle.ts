@@ -8,7 +8,7 @@ export async function run(provider: NetworkProvider) {
     const { address: quoteAsset } = Address.parseFriendly('EQBqSpvo4S87mX9tjHaG4zhYZeORhVhMapBJpnMZ64jhrEQK');
     const oracle = provider.open(await OracleV0.fromInit(nullAddress, quoteAsset));
 
-    const { address: oracleUSDTWallet } = Address.parseFriendly('EQB8L_gn_thGqHLcn8ext98l6efykyB6z4yLCe9vtlrFrcQ3');
+    const { address: oracleUSDTWallet } = Address.parseFriendly('kQBbiTLsPrFk2SPVGE6A1CU5AMZ9g5vhndGxtS9GiXPLu3ow');
 
     await oracle.send(
         provider.sender(),

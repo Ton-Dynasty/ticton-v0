@@ -42,6 +42,7 @@ message Tick {
     baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset
 }
 message Tock {
+    alarmIndex: Int as uint256; // the interacted alarm index
     scale: Int as uint32;
     createdAt: Int;
     watchmaker: Address;
@@ -124,7 +125,7 @@ struct OracleMetadata {
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 1000000;
 const DEPLOY_FEE: Int = ton("0.05");
-const STORAGE_FEE: Int = ton("0.01841");
+const STORAGE_FEE: Int = ton("0.01875");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
 const REWARD_FEE: Int = ton("0.065");
@@ -545,6 +546,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                     value: sendBackAmount,
                     mode: SendIgnoreErrors,
                     body: Tock{
+                        alarmIndex: self.totalAlarms,
                         scale: 1,
                         createdAt: currentTimestamp,
                         watchmaker: msg.sender,
@@ -619,6 +621,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                 value: DEPLOY_FEE,
                 mode: 0,
                 body: Tock{
+                    alarmIndex: self.totalAlarms,
                     createdAt: now(),
                     scale: msg.newScale,
                     watchmaker: msg.timeKeeper,

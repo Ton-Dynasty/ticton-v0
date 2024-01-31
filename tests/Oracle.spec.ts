@@ -402,6 +402,7 @@ describe('Oracle', () => {
         let AlarmAddress = await oracle.getGetAlarmAddress(0n);
         const tockMsg: Tock = {
             $$type: 'Tock',
+            alarmIndex: 0n,
             scale: 1n,
             createdAt: 0n,
             watchmaker: watchmaker.address,
