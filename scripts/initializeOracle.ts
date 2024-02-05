@@ -5,10 +5,13 @@ import { NetworkProvider } from '@ton-community/blueprint';
 export async function run(provider: NetworkProvider) {
     // null address represents ton coin
     const nullAddress: Address = new Address(0, Buffer.alloc(32));
-    const { address: quoteAsset } = Address.parseFriendly('EQBqSpvo4S87mX9tjHaG4zhYZeORhVhMapBJpnMZ64jhrEQK');
+    // jUSDC: EQCgGCY-rAxD89c4vQzGUZAiCbwbQgFXBJJJNTdJsbZdKVFG
+    // jUSDT: EQBqSpvo4S87mX9tjHaG4zhYZeORhVhMapBJpnMZ64jhrEQK
+    const { address: quoteAsset } = Address.parseFriendly('EQCgGCY-rAxD89c4vQzGUZAiCbwbQgFXBJJJNTdJsbZdKVFG');
     const oracle = provider.open(await OracleV0.fromInit(nullAddress, quoteAsset));
 
-    const { address: oracleUSDTWallet } = Address.parseFriendly('kQBbiTLsPrFk2SPVGE6A1CU5AMZ9g5vhndGxtS9GiXPLu3ow');
+    // jUSDC Quote Asset Wallet: kQDOjMnwOdaFiL8vCHDrACSWDbGOLQ0GZ-6Dyvpvbpw7vRo1
+    const { address: oracleUSDTWallet } = Address.parseFriendly('kQDOjMnwOdaFiL8vCHDrACSWDbGOLQ0GZ-6Dyvpvbpw7vRo1');
 
     await oracle.send(
         provider.sender(),
