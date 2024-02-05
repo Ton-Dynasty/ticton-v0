@@ -120,6 +120,16 @@ struct OracleMetadata {
     base_asset_wallet_address: Address;
     quote_asset_wallet_address: Address;
     is_initialized: Bool;
+    latestBaseAssetPrice: Int;
+    latestTimestamp: Int;
+}
+
+struct AlarmMetadata{
+    watchmaker: Address;
+    baseAssetScale: Int;
+    quoteAssetScale: Int;
+    remainScale: Int;
+    baseAssetPrice: Int;
 }
 
 const BASEASSET_DECIMALS: Int = 1000000000;
@@ -385,6 +395,16 @@ contract Alarm with Initializable {
         return self.baseAssetPrice;
     }
 
+    get fun getAlarmMetadata(): AlarmMetadata {
+        return AlarmMetadata{
+            watchmaker: self.watchmaker,
+            baseAssetScale: self.baseAssetScale,
+            quoteAssetScale: self.quoteAssetScale,
+            remainScale: self.remainScale,
+            baseAssetPrice: self.baseAssetPrice
+        };
+    }
+
     get fun getEstimate(buyNum: Int, newBaseAssetPrice: Int): EstimateResult {
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
@@ -410,6 +430,8 @@ contract Alarm with Initializable {
             needQuoteAssetAmount: needQuoteAssetAmount
         };
     }
+
+
 }
 
 contract OracleV0 with Deployable, Initializable, JettonMaster {
@@ -822,7 +844,9 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             min_base_asset_threshold: MIN_BASEASSET_TRESHOLD,
             base_asset_wallet_address: self.baseAssetWallet,
             quote_asset_wallet_address: self.quoteAssetWallet,
-            is_initialized: self.is_initialized
+            is_initialized: self.is_initialized,
+            latestBaseAssetPrice: self.latestBaseAssetPrice,
+            latestTimestamp: self.latestTimestamp
         };
     }
 }
