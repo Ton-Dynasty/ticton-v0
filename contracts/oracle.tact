@@ -130,6 +130,9 @@ struct AlarmMetadata{
     quoteAssetScale: Int;
     remainScale: Int;
     baseAssetPrice: Int;
+    baseAssetAmount: Int;
+    quoteAssetAmount: Int;
+    createdAt: Int;
 }
 
 const BASEASSET_DECIMALS: Int = 1000000000;
@@ -381,7 +384,10 @@ contract Alarm with Initializable {
             baseAssetScale: self.baseAssetScale,
             quoteAssetScale: self.quoteAssetScale,
             remainScale: self.remainScale,
-            baseAssetPrice: self.baseAssetPrice
+            baseAssetPrice: self.baseAssetPrice,
+            baseAssetAmount: self.baseAssetAmount,
+            quoteAssetAmount: self.quoteAssetAmount,
+            createdAt: self.createdAt
         };
     }
 
