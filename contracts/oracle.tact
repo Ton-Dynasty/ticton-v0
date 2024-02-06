@@ -375,26 +375,6 @@ contract Alarm with Initializable {
     }
 
     // Get Methods
-    get fun getWatchmaker(): Address {
-        return self.watchmaker;
-    }
-
-    get fun getBaseAssetScale(): Int {
-        return self.baseAssetScale;
-    }
-
-    get fun getQuoteAssetScale(): Int {
-        return self.quoteAssetScale;
-    }
-
-    get fun getRemainScale(): Int {
-        return self.remainScale;
-    }
-
-    get fun getBaseAssetPrice(): Int {
-        return self.baseAssetPrice;
-    }
-
     get fun getAlarmMetadata(): AlarmMetadata {
         return AlarmMetadata{
             watchmaker: self.watchmaker,
@@ -829,10 +809,6 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
 
     get fun getMyBalance(): Int {
         return myBalance();
-    }
-
-    get fun getBaseWallet(): Address {
-        return self.baseAssetWallet;
     }
 
     get fun getOracleData(): OracleMetadata {

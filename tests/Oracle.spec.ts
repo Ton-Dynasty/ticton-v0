@@ -79,7 +79,8 @@ describe('Oracle', () => {
         const newPrice = float(newBaseAssetPrice).mul(toUSDT(1)).divToInt(toTON(1));
         const extraFees = config?.extraFees ? toTON(config?.extraFees) : toTON('1');
         const alarmContract = blockchain.openContract(Alarm.fromAddress(await oracle.getGetAlarmAddress(alarmIndex)));
-        const oldPrice = new Decimal((await alarmContract.getGetBaseAssetPrice()).toString());
+        const baseAssetPrice = (await alarmContract.getGetAlarmMetadata()).baseAssetPrice;
+        const oldPrice = new Decimal(baseAssetPrice.toString());
 
         let needBaseAsset: Decimal;
         let needQuoteAsset: Decimal;
@@ -224,19 +225,19 @@ describe('Oracle', () => {
 
         const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
         // Check that watchmaker is watchmaker
-        let watchmakerAddress = await alarm0.getGetWatchmaker();
+        let watchmakerAddress = (await alarm0.getGetAlarmMetadata()).watchmaker;
         expect(watchmakerAddress.toString()).toEqual(watchmaker.address.toString());
 
         // Check that baseAssetScale is 1
-        let baseAssetScale = await alarm0.getGetBaseAssetScale();
+        let baseAssetScale = (await alarm0.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale).toEqual(1n);
 
         // Check that quoteAssetScale is 1
-        let quoteAssetScale = await alarm0.getGetQuoteAssetScale();
+        let quoteAssetScale = (await alarm0.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale).toEqual(1n);
 
         // Check that remainScale is 1
-        let remainScale = await alarm0.getGetRemainScale();
+        let remainScale = (await alarm0.getGetAlarmMetadata()).remainScale;
         expect(remainScale).toEqual(1n);
 
         return transferResult;
@@ -617,15 +618,15 @@ describe('Oracle', () => {
         });
 
         // Check that baseAssetScale is 0
-        let baseAssetScale = await alarm0.getGetBaseAssetScale();
+        let baseAssetScale = (await alarm0.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale).toEqual(0n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale = await alarm0.getGetQuoteAssetScale();
+        let quoteAssetScale = (await alarm0.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale = await alarm0.getGetRemainScale();
+        let remainScale = (await alarm0.getGetAlarmMetadata()).remainScale;
         expect(remainScale).toEqual(0n);
 
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
@@ -635,15 +636,15 @@ describe('Oracle', () => {
         let AlarmAddress2 = await oracle.getGetAlarmAddress(1n);
         let alarm02 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress2));
         // Check that baseAssetScale is 0
-        let baseAssetScale2 = await alarm02.getGetBaseAssetScale();
+        let baseAssetScale2 = (await alarm02.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale2).toEqual(2n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale2 = await alarm02.getGetQuoteAssetScale();
+        let quoteAssetScale2 = (await alarm02.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale2).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale2 = await alarm02.getGetRemainScale();
+        let remainScale2 = (await alarm02.getGetAlarmMetadata()).remainScale;
         expect(remainScale2).toEqual(2n);
     });
 
@@ -795,15 +796,15 @@ describe('Oracle', () => {
         });
 
         // Check that baseAssetScale is 0
-        let baseAssetScale = await alarm0.getGetBaseAssetScale();
+        let baseAssetScale = (await alarm0.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale).toEqual(0n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale = await alarm0.getGetQuoteAssetScale();
+        let quoteAssetScale = (await alarm0.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale = await alarm0.getGetRemainScale();
+        let remainScale = (await alarm0.getGetAlarmMetadata()).remainScale;
         expect(remainScale).toEqual(0n);
 
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
@@ -813,15 +814,15 @@ describe('Oracle', () => {
         let AlarmAddress2 = await oracle.getGetAlarmAddress(1n);
         let alarm02 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress2));
         // Check that baseAssetScale is 0
-        let baseAssetScale2 = await alarm02.getGetBaseAssetScale();
+        let baseAssetScale2 = (await alarm02.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale2).toEqual(2n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale2 = await alarm02.getGetQuoteAssetScale();
+        let quoteAssetScale2 = (await alarm02.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale2).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale2 = await alarm02.getGetRemainScale();
+        let remainScale2 = (await alarm02.getGetAlarmMetadata()).remainScale;
         expect(remainScale2).toEqual(2n);
     });
 
@@ -919,15 +920,15 @@ describe('Oracle', () => {
         });
 
         // Check that baseAssetScale is 0
-        let baseAssetScale = await alarm0.getGetBaseAssetScale();
+        let baseAssetScale = (await alarm0.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale).toEqual(0n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale = await alarm0.getGetQuoteAssetScale();
+        let quoteAssetScale = (await alarm0.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale = await alarm0.getGetRemainScale();
+        let remainScale = (await alarm0.getGetAlarmMetadata()).remainScale;
         expect(remainScale).toEqual(0n);
 
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
@@ -937,15 +938,15 @@ describe('Oracle', () => {
         let AlarmAddress2 = await oracle.getGetAlarmAddress(1n);
         let alarm02 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress2));
         // Check that baseAssetScale is 0
-        let baseAssetScale2 = await alarm02.getGetBaseAssetScale();
+        let baseAssetScale2 = (await alarm02.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale2).toEqual(2n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale2 = await alarm02.getGetQuoteAssetScale();
+        let quoteAssetScale2 = (await alarm02.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale2).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale2 = await alarm02.getGetRemainScale();
+        let remainScale2 = (await alarm02.getGetAlarmMetadata()).remainScale;
         expect(remainScale2).toEqual(2n);
     });
 
@@ -1276,7 +1277,7 @@ describe('Oracle', () => {
         // Check that Alarm2 baseAssetPrice is new Price
         let alarmAddress2 = await oracle.getGetAlarmAddress(2n);
         let alarm2 = blockchain.openContract(Alarm.fromAddress(alarmAddress2));
-        let alarmNewPrice2 = await alarm2.getGetBaseAssetPrice();
+        let alarmNewPrice2 = (await alarm2.getGetAlarmMetadata()).baseAssetPrice;
         expect(Number(alarmNewPrice2) / 2 ** 64).toEqual(0.006);
 
         // Check that return the remaining funds back to the Timekeeper2
@@ -1369,15 +1370,15 @@ describe('Oracle', () => {
         });
 
         // Check that baseAssetScale is 0
-        let baseAssetScale = await alarm0.getGetBaseAssetScale();
+        let baseAssetScale = (await alarm0.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale).toEqual(2n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale = await alarm0.getGetQuoteAssetScale();
+        let quoteAssetScale = (await alarm0.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale).toEqual(0n);
 
         // Check that remainScale is 0
-        let remainScale = await alarm0.getGetRemainScale();
+        let remainScale = (await alarm0.getGetAlarmMetadata()).remainScale;
         expect(remainScale).toEqual(0n);
 
         // Check that alarm count is 2 (Timekeeper will build a new alarm)
@@ -1387,15 +1388,15 @@ describe('Oracle', () => {
         let AlarmAddress2 = await oracle.getGetAlarmAddress(1n);
         let alarm02 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress2));
         // Check that baseAssetScale is 0
-        let baseAssetScale2 = await alarm02.getGetBaseAssetScale();
+        let baseAssetScale2 = (await alarm02.getGetAlarmMetadata()).baseAssetScale;
         expect(baseAssetScale2).toEqual(2n);
 
         // Check that quoteAssetScale is 2
-        let quoteAssetScale2 = await alarm02.getGetQuoteAssetScale();
+        let quoteAssetScale2 = (await alarm02.getGetAlarmMetadata()).quoteAssetScale;
         expect(quoteAssetScale2).toEqual(2n);
 
         // Check that remainScale is 0
-        let remainScale2 = await alarm02.getGetRemainScale();
+        let remainScale2 = (await alarm02.getGetAlarmMetadata()).remainScale;
         expect(remainScale2).toEqual(2n);
     });
 
@@ -1671,7 +1672,7 @@ describe('Oracle', () => {
             success: true,
         });
         // printTransactionFees(ringResult.transactions);
-        await alarmContract.getGetRemainScale().catch((err) => {
+        await alarmContract.getGetAlarmMetadata().catch((err) => {
             expect(err.message).toEqual('Trying to run get method on non-active contract');
         });
     });
@@ -1807,7 +1808,7 @@ describe('Oracle', () => {
         await windInJettonTransfer(timekeeper, oracle, alarmIndexBefore, buyNum, '5');
 
         // Check that remainScale of alarm0 is 0
-        let remainScale = await alarmContract.getGetRemainScale();
+        let remainScale = (await alarmContract.getGetAlarmMetadata()).remainScale;
         expect(remainScale).toEqual(0n);
 
         // wait for 100 seconds on the blockchain
