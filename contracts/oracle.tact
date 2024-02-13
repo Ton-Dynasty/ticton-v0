@@ -9,6 +9,9 @@ native float(value: Int): Int;
 @name(toInt)
 native int(value: Int): Int;
 
+// @name(abs)
+// native abs(value: Int): Int;
+
 @name(toFloat)
 extends native float(self: Int): Int;
 
@@ -26,6 +29,7 @@ extends native div(self: Int, otherFloat: Int): Int;
 
 @name(muldiv)
 extends native muldiv(self: Int, numerator: Int, denominator: Int): Int;
+
 
 message Initialize {
     baseAssetWallet: Address; // e.g. jetton wallet address for TON, which is 0
@@ -138,7 +142,7 @@ struct AlarmMetadata{
 const BASEASSET_DECIMALS: Int = 1000000000;
 const QUOTEASSET_DECIMALS: Int = 1000000;
 const DEPLOY_FEE: Int = ton("0.05");
-const STORAGE_FEE: Int = ton("0.01875");
+const STORAGE_FEE: Int = ton("0.019");
 const CHECK_FEE: Int = ton("0.001");
 const REFUND_FEE: Int = ton("0.02");
 const REWARD_FEE: Int = ton("0.065");
@@ -537,10 +541,22 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                 return ;
             }
             // Preserve the baseAssetAmount
-            let needBaseAssetAmount: Int = int(msg.amount.float().div(baseAssetPrice));
+            let needBaseAssetAmount: Int = msg.amount.float().div(baseAssetPrice);
+            //dump(msg.amount.float());
             
             let tmp: Int = ctx.readForwardFee();
-            require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
+            //require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
+            let tolerance: Int = needBaseAssetAmount - MIN_BASEASSET_TRESHOLD.float();
+            if (tolerance < 0) {
+                // -500000000
+                require(abs(tolerance) < 10000000000, "baseAssetAmount is too small");
+                needBaseAssetAmount = int(MIN_BASEASSET_TRESHOLD.float() + tolerance);
+            }
+            else {
+                needBaseAssetAmount = int(needBaseAssetAmount);
+            }
+            
+            //require(abs(needBaseAssetAmount - msg.amount) < 1000000000, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * ctx.readForwardFee() + STORAGE_FEE),
                 "Insufficient funds to pay for the gas"
             );
