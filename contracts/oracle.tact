@@ -126,6 +126,7 @@ struct OracleMetadata {
     is_initialized: Bool;
     latestBaseAssetPrice: Int;
     latestTimestamp: Int;
+    totalAlarms: Int;
 }
 
 struct AlarmMetadata{
@@ -544,14 +545,13 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             }
             // Preserve the baseAssetAmount
             let needBaseAssetAmount: Int = msg.amount.float().div(baseAssetPrice);
-            //dump(msg.amount.float());
             
             let tmp: Int = ctx.readForwardFee();
             //require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             let tolerance: Int = needBaseAssetAmount - MIN_BASEASSET_TRESHOLD.float();
             if (tolerance < 0) {
-                // -500000000
-                require(abs(tolerance) < 10000000000, "baseAssetAmount is too small");
+                // If we qoute 2.2 ton/usdt, we will get 999999999.9999999 which is less than 1 ton. So we need to add a tolerance 10000000000000
+                require(abs(tolerance) < 10000000000000, "baseAssetAmount is too small");
                 needBaseAssetAmount = int(MIN_BASEASSET_TRESHOLD.float() + tolerance);
             }
             else {
@@ -846,7 +846,8 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             quote_asset_wallet_address: self.quoteAssetWallet,
             is_initialized: self.is_initialized,
             latestBaseAssetPrice: self.latestBaseAssetPrice,
-            latestTimestamp: self.latestTimestamp
+            latestTimestamp: self.latestTimestamp,
+            totalAlarms: self.totalAlarms
         };
     }
 }
