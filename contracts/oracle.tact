@@ -324,6 +324,18 @@ contract Alarm with Initializable {
         if (self.remainScale > 0) {
             baseAssetPrice = self.baseAssetPrice;
         }
+        // Update scales if all actions successfully
+        if (msg.newBaseAssetPrice > self.baseAssetPrice) {
+            // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
+            self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
+            self.quoteAssetScale = (self.quoteAssetScale + msg.buyNum);
+            self.remainScale = (self.remainScale - msg.buyNum);
+        } else {
+             // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
+            self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
+            self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
+            self.remainScale = (self.remainScale - msg.buyNum);
+        }
         send(SendParameters{
                 to: ctx.sender,
                 value: 0,
@@ -341,18 +353,6 @@ contract Alarm with Initializable {
                 }.toCell()
             }
         );
-        // Update scales if all actions successfully
-        if (msg.newBaseAssetPrice > self.baseAssetPrice) {
-            // TimeKeeper take baseAsset away, so decrease baseAssetScale and increase quoteAssetScale
-            self.baseAssetScale = (self.baseAssetScale - msg.buyNum);
-            self.quoteAssetScale = (self.quoteAssetScale + msg.buyNum);
-            self.remainScale = (self.remainScale - msg.buyNum);
-        } else {
-             // TimeKeeper take quoteAsset away, so increase baseAssetScale and decrease quoteAssetScale
-            self.baseAssetScale = (self.baseAssetScale + msg.buyNum);
-            self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
-            self.remainScale = (self.remainScale - msg.buyNum);
-        }
     }
 
     receive(msg: Mute){
@@ -551,7 +551,9 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             let tolerance: Int = needBaseAssetAmount - MIN_BASEASSET_TRESHOLD.float();
             if (tolerance < 0) {
                 // If we qoute 2.2 ton/usdt, we will get 999999999.9999999 which is less than 1 ton. So we need to add a tolerance 10000000000000
-                require(abs(tolerance) < 10000000000000, "baseAssetAmount is too small");
+                // 557913043479
+                // 10000000000000
+                require((-tolerance) < 10000000000000, "baseAssetAmount is too small");
                 needBaseAssetAmount = int(MIN_BASEASSET_TRESHOLD.float() + tolerance);
             }
             else {
