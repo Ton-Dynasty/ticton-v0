@@ -329,8 +329,7 @@ describe('Oracle', () => {
         blockchain.now = Math.floor(Date.now() / 1000);
         const jetton_content: Cell = beginCell().endCell();
         jettonMaster = blockchain.openContract(await ExampleJettonMaster.fromInit(owner.address, jetton_content));
-
-        oracle = blockchain.openContract(await OracleV0.fromInit(zero_address, jettonMaster.address));
+        oracle = blockchain.openContract(await OracleV0.fromInit(zero_address, jettonMaster.address, jetton_content));
         const deployResult = await oracle.send(
             owner.getSender(),
             {

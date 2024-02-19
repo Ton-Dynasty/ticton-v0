@@ -444,14 +444,14 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
     total_supply: Int as coins = 0;
     mintable: Bool = true;
     jetton_content: Cell;
-    init(baseAsset: Address, quoteAsset: Address){
+    init(baseAsset: Address, quoteAsset: Address, jetton_content: Cell){
         self.owner = sender();
         self.is_initialized = false;
         self.baseAsset = baseAsset;
         self.quoteAsset = quoteAsset;
         self.baseAssetWallet = newAddress(0, 0);
         self.quoteAssetWallet = newAddress(0, 0);
-        self.jetton_content = emptyCell();
+        self.jetton_content = jetton_content;
     }
 
     inline fun requireAlarm(index: Int) {
