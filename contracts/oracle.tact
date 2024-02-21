@@ -263,44 +263,21 @@ contract Alarm with Initializable {
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
         if (msg.newBaseAssetPrice > self.baseAssetPrice) {
-            // Down blow condition is not gonna happen (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
-            // if (self.baseAssetScale < msg.buyNum) {
-            //     failed = true;
-            // } else {
-            // }
-
+            // NOTE: (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
+            
             // Buy baseAsset
             // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
             // need ton amount = (buy amount * 2) - the amount you buy from this alarm
             needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) + self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
             needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
         } else {
-            // if (self.quoteAssetScale < msg.buyNum) {
-            //     failed = true;
-            // } else {
-            // }
+            // NOTE: (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
 
             // Buy quoteAsset, put baseAsset into the alarm
             needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) - self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
             needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
         }
 
-        // We don't have fail variable anymore (check line266)
-        // if (failed) {
-        //     // send refund message back to oracle and exit
-        //     send(SendParameters{
-        //             to: self.oracleAddress,
-        //             value: (remainBaseAssetAmount - REFUND_FEE),
-        //             mode: SendIgnoreErrors,
-        //             body: Refund{
-        //                 alarmIndex: self.index,
-        //                 refundQuoteAssetAmount: msg.quoteAssetAmouynt,
-        //                 receiver: msg.sender
-        //             }.toCell()
-        //         }
-        //     );
-        //     return ;
-        // }
         // Check base asset and quote asset is sufficient
         refundBaseAssetAmount = (remainBaseAssetAmount - needBaseAssetAmount);
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
