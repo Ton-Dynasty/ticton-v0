@@ -1,4 +1,3 @@
-import { watch } from 'fs';
 import { Alarm } from '../build/Oracle/tact_Alarm';
 import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
 import { Address, Cell, beginCell, toNano } from 'ton-core';
@@ -2155,5 +2154,154 @@ describe('Oracle', () => {
         let timekeeperRewardBalance = timekeeperRewardWalletData.balance;
         expect(timekeeperRewardBalance).toEqual(60000000n);
         expect(oracleBalanceAfter - oracleBalance).toBeGreaterThan(0n); // Oracle's balance is sligjtly increased
+    });
+
+    // Issue12:
+    // Assume an existing alarm with ID 10, where both base_asset_scale and quote_asset_scale are set to 2. (remain_scale: 2)
+    // timeKeeper A invokes the wind method on alarm 10, reducing base_asset_scale to 1 and elevating quote_asset_scale to 3. (remain_scale: 1)
+    // Subsequently, timeKeeper B also triggers the wind method for alarm 10, this time elevating base_asset_scale back to 2 and reducing quote_asset_scale to 2. (remain_scale: 0)
+    // When timeKeeper C attempts to engage the wind method on alarm 10, the operation fails due to a remaining scale of 0.
+    it('Issue 12', async () => {
+        // Initialize oracle
+        await initializeOracle(oracle, owner);
+        // Mint tokens to watchmaker
+        await mintToken(jettonMaster, watchmaker);
+        // watchmaker post price to oracle
+        const quoteAssetToTransfer1 = 4; // 4usdt
+        await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
+        // Timekeeper send wind msg to oracle
+        let timekeeper: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper');
+        await mintToken(jettonMaster, timekeeper);
+        let alarmIndex = 0n;
+        let buyNum = 1;
+        await windInJettonTransfer(timekeeper, oracle, alarmIndex, buyNum, '5');
+
+        // Check that alarm count is 2 (Timekeeper will build a new alarm)
+        let alarmIndexAfter = await oracle.getTotalAmount();
+        expect(alarmIndexAfter).toEqual(2n);
+
+        let alarmAddress1 = await oracle.getGetAlarmAddress(1n);
+        let alarm01 = blockchain.openContract(await Alarm.fromAddress(alarmAddress1));
+        // Check that baseAssetScale is 2
+        let baseAssetScale1 = (await alarm01.getGetAlarmMetadata()).baseAssetScale;
+        expect(baseAssetScale1).toEqual(2n);
+
+        // Check that quoteAssetScale is 2
+        let quoteAssetScale1 = (await alarm01.getGetAlarmMetadata()).quoteAssetScale;
+        expect(quoteAssetScale1).toEqual(2n);
+
+        // Check that remainScale is 2
+        let remainScale1 = (await alarm01.getGetAlarmMetadata()).remainScale;
+        expect(remainScale1).toEqual(2n);
+
+        // Timekeeper2 send wind msg to oracle
+        let timekeeper2: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper2');
+        await mintToken(jettonMaster, timekeeper2);
+        alarmIndex = 1n;
+        buyNum = 1;
+        await windInJettonTransfer(timekeeper2, oracle, alarmIndex, buyNum, '6');
+
+        // Check that alarm count is 3 (Timekeeper will build a new alarm)
+        alarmIndexAfter = await oracle.getTotalAmount();
+        expect(alarmIndexAfter).toEqual(3n);
+
+        let alarm02 = blockchain.openContract(await Alarm.fromAddress(alarmAddress1));
+        let baseAssetScale2 = (await alarm02.getGetAlarmMetadata()).baseAssetScale;
+        expect(baseAssetScale2).toEqual(1n);
+        let qouteAssetSacale2 = (await alarm02.getGetAlarmMetadata()).quoteAssetScale;
+        expect(qouteAssetSacale2).toEqual(3n);
+        let remainScale2 = (await alarm02.getGetAlarmMetadata()).remainScale;
+        expect(remainScale2).toEqual(1n);
+
+        // Timekeeper3 send wind msg to oracle to make alarm02's remainScale to 0, baseAssetScale to 2 and quoteAssetScale to 2
+        let timekeeper3: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper3');
+        await mintToken(jettonMaster, timekeeper3);
+        alarmIndex = 1n;
+        buyNum = 1;
+        await windInJettonTransfer(timekeeper3, oracle, alarmIndex, buyNum, '4');
+
+        // Check that alarm count is 4 (Timekeeper will build a new alarm)
+        alarmIndexAfter = await oracle.getTotalAmount();
+        expect(alarmIndexAfter).toEqual(4n);
+        baseAssetScale2 = (await alarm02.getGetAlarmMetadata()).baseAssetScale;
+        expect(baseAssetScale2).toEqual(2n);
+        qouteAssetSacale2 = (await alarm02.getGetAlarmMetadata()).quoteAssetScale;
+        expect(qouteAssetSacale2).toEqual(2n);
+        remainScale2 = (await alarm02.getGetAlarmMetadata()).remainScale;
+        expect(remainScale2).toEqual(0n);
+
+        // Timekeeper4 send wind msg to alarm that its remainScale is 0
+        let timekeeper4: SandboxContract<TreasuryContract> = await blockchain.treasury('timekeeper4');
+        await mintToken(jettonMaster, timekeeper4);
+        alarmIndex = 1n;
+        buyNum = 1;
+        let alarmIndexBeforeWind = await oracle.getTotalAmount();
+        const { windResult } = await windInJettonTransfer(timekeeper4, oracle, alarmIndex, buyNum, '4');
+
+        let alarmIndexAfterWind = await oracle.getTotalAmount();
+
+        // Check that do not create a new alarm due to remainScale is 0
+        expect(alarmIndexAfterWind).toEqual(alarmIndexBeforeWind);
+
+        // watchmaker's jetton wallet address
+        const timekeeper4WalletAddress = await jettonMaster.getGetWalletAddress(timekeeper4.address);
+        // Check that timekeeper send JettonTransfer msg to her jetton wallet
+        expect(windResult.transactions).toHaveTransaction({
+            from: timekeeper4.address,
+            to: timekeeper4WalletAddress,
+            op: 0x0f8a7ea5,
+            success: true,
+        });
+
+        // timekeeper's jetton wallet address
+        const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
+
+        // Check that timekeeper's jetton wallet send JettonInternalTransfer msg to oracle's jetton wallet
+        expect(windResult.transactions).toHaveTransaction({
+            from: timekeeper4WalletAddress,
+            to: oracleWalletAddress,
+            op: 0x178d4519,
+            success: true,
+        });
+
+        // Check that oracle's jetton wallet send JettonTransferNotification msg to oracle
+        expect(windResult.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: oracle.address,
+            op: 0x7362d09c,
+            success: true,
+        });
+
+        // Check that oracle send Reset msg to Alarm0
+        expect(windResult.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: alarmAddress1,
+            op: 0x352395e7,
+            success: true,
+        });
+
+        // Check that Alarm contract send Refund msg to oracle
+        expect(windResult.transactions).toHaveTransaction({
+            from: alarmAddress1,
+            to: oracle.address,
+            op: 0x201dd3cd,
+            success: true,
+        });
+
+        // Check that Orcale send JettonTransfer msg to oracle's jetton wallet
+        expect(windResult.transactions).toHaveTransaction({
+            from: oracle.address,
+            to: oracleWalletAddress,
+            op: 0x0f8a7ea5,
+            success: true,
+        });
+
+        // Check that oracle's jetton wallet send JettonInternalTransfer msg to timekeeper's jetton wallet
+        expect(windResult.transactions).toHaveTransaction({
+            from: oracleWalletAddress,
+            to: timekeeper4WalletAddress,
+            op: 0x178d4519,
+            success: true,
+        });
     });
 });

@@ -256,46 +256,28 @@ contract Alarm with Initializable {
             );
             return ;
         }
-        let failed: Bool = false;
+        //let failed: Bool = false;
         let refundBaseAssetAmount: Int = 0; // 0 means return as much as possible
         let refundQuoteAssetAmount: Int = 0;
         let baseAssetPrice: Int = 0;
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
         if (msg.newBaseAssetPrice > self.baseAssetPrice) {
+            // NOTE: (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
+            
             // Buy baseAsset
-            if (self.baseAssetScale < msg.buyNum) {
-                failed = true;
-            } else {
-                // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
-                // need ton amount = (buy amount * 2) - the amount you buy from this alarm
-                needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) + self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
-                needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
-            }
+            // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
+            // need ton amount = (buy amount * 2) - the amount you buy from this alarm
+            needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) + self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
+            needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
         } else {
+            // NOTE: (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
+
             // Buy quoteAsset, put baseAsset into the alarm
-            if (self.quoteAssetScale < msg.buyNum) {
-                failed = true;
-            } else {
-                needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) - self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
-                needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
-            }
+            needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) - self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
+            needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
         }
-        if (failed) {
-            // send refund message back to oracle and exit
-            send(SendParameters{
-                    to: self.oracleAddress,
-                    value: (remainBaseAssetAmount - REFUND_FEE),
-                    mode: SendIgnoreErrors,
-                    body: Refund{
-                        alarmIndex: self.index,
-                        refundQuoteAssetAmount: msg.quoteAssetAmount,
-                        receiver: msg.sender
-                    }.toCell()
-                }
-            );
-            return ;
-        }
+
         // Check base asset and quote asset is sufficient
         refundBaseAssetAmount = (remainBaseAssetAmount - needBaseAssetAmount);
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
