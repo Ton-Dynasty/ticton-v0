@@ -1,4 +1,3 @@
-import { watch } from 'fs';
 import { Alarm } from '../build/Oracle/tact_Alarm';
 import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
 import { Address, Cell, beginCell, toNano } from 'ton-core';
@@ -10,7 +9,6 @@ import Decimal from 'decimal.js';
 import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
 import { RewardJettonWallet } from '../build/Oracle/tact_RewardJettonWallet';
-import exp from 'constants';
 
 const QUOTEASSET_DECIMALS = 6;
 const BASEASSET_DECIMALS = 9;
@@ -2251,6 +2249,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: timekeeper4.address,
             to: timekeeper4WalletAddress,
+            op: 0x0f8a7ea5,
             success: true,
         });
 
@@ -2261,6 +2260,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: timekeeper4WalletAddress,
             to: oracleWalletAddress,
+            op: 0x178d4519,
             success: true,
         });
 
@@ -2268,6 +2268,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: oracleWalletAddress,
             to: oracle.address,
+            op: 0x7362d09c,
             success: true,
         });
 
@@ -2275,6 +2276,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: alarmAddress1,
+            op: 0x352395e7,
             success: true,
         });
 
@@ -2282,6 +2284,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: alarmAddress1,
             to: oracle.address,
+            op: 0x201dd3cd,
             success: true,
         });
 
@@ -2289,6 +2292,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: oracle.address,
             to: oracleWalletAddress,
+            op: 0x0f8a7ea5,
             success: true,
         });
 
@@ -2296,6 +2300,7 @@ describe('Oracle', () => {
         expect(windResult.transactions).toHaveTransaction({
             from: oracleWalletAddress,
             to: timekeeper4WalletAddress,
+            op: 0x178d4519,
             success: true,
         });
     });
