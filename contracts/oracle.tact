@@ -3,14 +3,18 @@ import "./packages/math/float.fc";
 import "./packages/token/jetton/JettonMaster.tact";
 import "./packages/token/jetton/JettonWallet.tact";
 
+/*
+The main idea of the oracle is to quote the price of the baseAsset relative to the quoteAsset.
+The quoter needs to collateralize corresponding amount of base aaset and quote asset to the oracle.
+If the quoter is honest and the price has not been questioned, the quoter will get the collateral back with rewards.
+If the quoter try to cheat the price, arbitrager can arbitrage the quoter's position.
+*/
+
 @name(toFloat)
 native float(value: Int): Int;
 
 @name(toInt)
 native int(value: Int): Int;
-
-// @name(abs)
-// native abs(value: Int): Int;
 
 @name(toFloat)
 extends native float(self: Int): Int;
@@ -119,7 +123,7 @@ struct OracleMetadata {
     min_base_asset_threshold: Int; // The minimum amount of baseAsset that Watchmaker have to provide to quote
     base_asset_wallet_address: Address; // Oracle's baseAsset wallet address
     quote_asset_wallet_address: Address; // Oracle's quoteAsset wallet address
-    is_initialized: Bool; // Check if the Oracle is initialized
+    isInitialized: Bool; // Check if the Oracle is initialized
     latestBaseAssetPrice: Int; // The latest price of the baseAsset
     latestTimestamp: Int; // The latest timestamp of updating the baseAsset price
     totalAlarms: Int; // The total amount of alarms
@@ -411,15 +415,24 @@ contract Alarm with Initializable {
 
 }
 
+// OracleV0 is the main contract which Watchmaker and TimeKeeper can interact with, there are 3 main actions to conduct:
+// - Tick
+// Watchmaker can send a "Tick" message to quote the price, and open a new alarm contract for recording parameters
+// - Wind
+// TimeKeeper can send a "Wind" message to arbitrage other TimeKeeper's alarm. At the end of the trace,
+// it will create a new alarm contract as well to record the new price
+// - Ring
+// The owner of alarm can send a "Ring" message to close the quotation, if both base asset and quote asset are 
+// not empty, then the owner will receive the remaining funds and rewards, and oracle will update the price correspondingly.
 contract OracleV0 with Deployable, Initializable, JettonMaster {
     // deploy
     owner: Address;
     // initialize
-    baseAsset: Address; // ton
-    quoteAsset: Address; // usdt
+    baseAsset: Address; // e.g. TON
+    quoteAsset: Address; // e.g. USDT
     baseAssetWallet: Address;
     quoteAssetWallet: Address;
-    is_initialized: Bool;
+    isInitialized: Bool;
     // calculated
     totalAlarms: Int = 0;
     latestBaseAssetPrice: Int = 0; // latest price of baseAsset
@@ -430,7 +443,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
     jetton_content: Cell;
     init(baseAsset: Address, quoteAsset: Address){
         self.owner = sender();
-        self.is_initialized = false;
+        self.isInitialized = false;
         self.baseAsset = baseAsset;
         self.quoteAsset = quoteAsset;
         self.baseAssetWallet = newAddress(0, 0);
@@ -443,23 +456,26 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
     }
 
     override inline fun requireInitialized() {
-        require(self.is_initialized == true, "Not initialized");
+        require(self.isInitialized == true, "Not initialized");
     }
 
     override inline fun requireNotInitialized() {
-        require(self.is_initialized == false, "Already initialized");
+        require(self.isInitialized == false, "Already initialized");
     }
 
     override inline fun calculate_jetton_wallet_init(owner_address: Address): StateInit {
         return initOf RewardJettonWallet(owner_address, myAddress());
     }
 
+    // Initialize message is used to initialize the Oracle.
+    // It will set jetton wallet address for both base asset and quote asset, and it also set the reward jetton content.
+    // Before initialization, all method in this contract will be blocked.
     receive(msg: Initialize){
-        require(self.is_initialized == false, "Already initialized");
+        require(self.isInitialized == false, "Already initialized");
         require(sender() == self.owner, "Only owner can initialize");
         require(msg.baseAssetWallet == newAddress(0, 0), "Only support TON as baseAsset");
         self.owner = myAddress();
-        self.is_initialized = true;
+        self.isInitialized = true;
         self.baseAssetWallet = msg.baseAssetWallet;
         self.quoteAssetWallet = msg.quoteAssetWallet;
         self.jetton_content = msg.rewardJettonContent;
@@ -491,7 +507,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
     // If it is Wind, then it will send Reset message to the alarm, and check whether Timekeeper can abirtrage in the alarm contract
     receive(msg: JettonTransferNotification){
         let ctx: Context = context();
-        if (self.is_initialized == false) {
+        if (self.isInitialized == false) {
             // Return jetton back if gas is enough
             // WARNING: Don't return jetton if the oracle is not initialized
             send(SendParameters{to: ctx.sender, value: ((ctx.value - ctx.readForwardFee()) - STORAGE_FEE), mode: 0});
@@ -847,12 +863,12 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         return OracleMetadata {
             base_asset_address: self.baseAsset,
             quote_asset_address: self.quoteAsset,
-            base_asset_decimals: 9,
-            quote_asset_decimals: 6,
+            base_asset_decimals: 9, // TODO: for POC version only, we will remove this v1
+            quote_asset_decimals: 6, // TODO: for POC version only, we will remove this v1
             min_base_asset_threshold: MIN_BASEASSET_TRESHOLD,
             base_asset_wallet_address: self.baseAssetWallet,
             quote_asset_wallet_address: self.quoteAssetWallet,
-            is_initialized: self.is_initialized,
+            isInitialized: self.isInitialized,
             latestBaseAssetPrice: self.latestBaseAssetPrice,
             latestTimestamp: self.latestTimestamp,
             totalAlarms: self.totalAlarms
