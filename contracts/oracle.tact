@@ -34,6 +34,7 @@ extends native muldiv(self: Int, numerator: Int, denominator: Int): Int;
 message Initialize {
     baseAssetWallet: Address; // e.g. jetton wallet address for TON, which is 0
     quoteAssetWallet: Address; // e.g. jetton wallet address for USDT
+    rewardJettonContent: Cell; // jetton content for reward token
 }
 message Refund {
     alarmIndex: Int as uint256; // the interacted alarm index
@@ -338,7 +339,7 @@ contract Alarm with Initializable {
     }
 
     receive(msg: Mute){
-        // TODO: When a Watchmaker wishes to mute an alarm
+        // When a Watchmaker wishes to mute an alarm
         // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
         // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
@@ -426,14 +427,14 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
     total_supply: Int as coins = 0;
     mintable: Bool = true;
     jetton_content: Cell;
-    init(baseAsset: Address, quoteAsset: Address, jetton_content: Cell){
+    init(baseAsset: Address, quoteAsset: Address){
         self.owner = sender();
         self.is_initialized = false;
         self.baseAsset = baseAsset;
         self.quoteAsset = quoteAsset;
         self.baseAssetWallet = newAddress(0, 0);
         self.quoteAssetWallet = newAddress(0, 0);
-        self.jetton_content = jetton_content;
+        self.jetton_content = emptyCell();
     }
 
     inline fun requireAlarm(index: Int) {
@@ -460,6 +461,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         self.is_initialized = true;
         self.baseAssetWallet = msg.baseAssetWallet;
         self.quoteAssetWallet = msg.quoteAssetWallet;
+        self.jetton_content = msg.rewardJettonContent;
     }
 
     receive(msg: Refund){
