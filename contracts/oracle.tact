@@ -46,9 +46,9 @@ message Tick {
 }
 message Tock {
     alarmIndex: Int as uint256; // the interacted alarm index
-    scale: Int as uint32;
-    createdAt: Int;
-    watchmaker: Address;
+    scale: Int as uint32; // The alarm's scale, it always equals to 1 when creating a new alarm
+    createdAt: Int; // The timestamp of the alarm creation
+    watchmaker: Address; // The watchmaker address to build the alarm
     baseAssetPrice: Int; // baseAsset price relative to quoteAsset (e.g. baseAssetPrice=2.5 means 1 TON = 2.5 USDT)
 }
 message Wind {
@@ -57,14 +57,10 @@ message Wind {
     newBaseAssetPrice: Int as uint256; // new baseAsset price relative to quoteAsset in fixed point float
 }
 message Reset {
-    sender: Address;
+    sender: Address; // The TimeKeeper address
     buyNum: Int; // The number of scales to buy
     quoteAssetAmount: Int; // The amount of quoteAsset oracle received
     newBaseAssetPrice: Int; // The new baseAsset price relative to quoteAsset
-}
-message Sync {
-    baseAssetPrice: Int as uint256; // quoteAsset amount to buy 1 baseAsset
-    createdAt: Int;
 }
 message Ring {
     queryID: Int; // The queryID of the request
@@ -79,10 +75,10 @@ message Check {
     quoteIndex: Int; // 0 for baseAsset, 1 for quoteAsset
 }
 message Announce {
-    queryID: Int;
-    quoteAsset: Address;
-    timestamp: Int;
-    price: Int;
+    queryID: Int; // The queryID of the request
+    quoteAsset: Address; // The address of the quoteAsset
+    timestamp: Int; // The timestamp of last update of the price
+    price: Int; // The price of the asset that sender requested
 }
 message Chronoshift {
     queryID: Int; // The queryID of the request
@@ -97,51 +93,51 @@ message Chronoshift {
     quoteAssetAmount: Int; // The quoteAsset amount that Watchmaker used to quote
 }
 message Chime {
-    alarmIndex: Int;
-    timeKeeper: Address;
-    newBaseAssetPrice: Int as uint256;
-    newScale: Int;
-    refundQuoteAssetAmount: Int;
-    baseAssetPrice: Int as uint256;
-    createdAt: Int;
-    remainScale: Int;
+    alarmIndex: Int; // The alarm index which is Winded
+    timeKeeper: Address; // The TimeKeeper address
+    newBaseAssetPrice: Int as uint256; // The new baseAsset price that TimeKeeper provided after arbitraging 
+    newScale: Int; // It will be 2 times of the buyNum in the arbitraged alarm contract
+    refundQuoteAssetAmount: Int; // The amount of quoteAsset to refund
+    baseAssetPrice: Int as uint256; // The baseAsset price in the abirtraged alarm contract
+    createdAt: Int; // The timestamp of the alarm creation
+    remainScale: Int; // The remaining scale of the arbitraged alarm contract
     preserveBaseAssetAmount: Int; // Tell oracle to preserve exactly this amount of baseAsset
 }
 
 struct EstimateResult {
-    canBuy: Bool;
-    needBaseAssetAmount: Int;
-    needQuoteAssetAmount: Int;
+    canBuy: Bool; // Check if the TimeKeeper can buy or not
+    needBaseAssetAmount: Int; // The amount of baseAsset that TimeKeeper need to pay to abirtrage
+    needQuoteAssetAmount: Int; // The amount of quoteAsset that TimeKeeper need to pay to abirtrage
 } 
 
 struct OracleMetadata {
-    base_asset_address: Address;
-    quote_asset_address: Address;
-    base_asset_decimals: Int;
-    quote_asset_decimals: Int;
-    min_base_asset_threshold: Int;
-    base_asset_wallet_address: Address;
-    quote_asset_wallet_address: Address;
-    is_initialized: Bool;
-    latestBaseAssetPrice: Int;
-    latestTimestamp: Int;
-    totalAlarms: Int;
+    base_asset_address: Address; // The address of the baseAsset
+    quote_asset_address: Address; // The address of the quoteAsset
+    base_asset_decimals: Int; // The decimals of the baseAsset
+    quote_asset_decimals: Int; // The decimals of the quoteAsset
+    min_base_asset_threshold: Int; // The minimum amount of baseAsset that Watchmaker have to provide to quote
+    base_asset_wallet_address: Address; // Oracle's baseAsset wallet address
+    quote_asset_wallet_address: Address; // Oracle's quoteAsset wallet address
+    is_initialized: Bool; // Check if the Oracle is initialized
+    latestBaseAssetPrice: Int; // The latest price of the baseAsset
+    latestTimestamp: Int; // The latest timestamp of updating the baseAsset price
+    totalAlarms: Int; // The total amount of alarms
 }
 
 struct AlarmMetadata{
-    watchmaker: Address;
-    baseAssetScale: Int;
-    quoteAssetScale: Int;
-    remainScale: Int;
-    baseAssetPrice: Int;
-    baseAssetAmount: Int;
-    quoteAssetAmount: Int;
-    createdAt: Int;
-    alarmIndex: Int;
+    watchmaker: Address; // The watchmaker address of the alarm
+    baseAssetScale: Int; // The baseAsset scale of the alarm
+    quoteAssetScale: Int; // The quoteAsset scale of the alarm
+    remainScale: Int; // The remaining scale of the alarm
+    baseAssetPrice: Int; // The baseAsset price of the alarm
+    baseAssetAmount: Int; // The amount of baseAsset that the alarm have
+    quoteAssetAmount: Int; // The amount of quoteAsset that the alarm have
+    createdAt: Int; // The timestamp of the alarm creation
+    alarmIndex: Int; // The alarm index
 }
 
-const BASEASSET_DECIMALS: Int = 1000000000;
-const QUOTEASSET_DECIMALS: Int = 1000000;
+const BASEASSET_DECIMALS: Int = 1000000000; // 10 ** 9
+const QUOTEASSET_DECIMALS: Int = 1000000; // 10 ** 6
 const DEPLOY_FEE: Int = ton("0.05");
 const STORAGE_FEE: Int = ton("0.019");
 const CHECK_FEE: Int = ton("0.001");
@@ -157,6 +153,7 @@ trait Initializable {
     abstract inline fun requireNotInitialized();
 }
 
+// Tic Ton reward Token (TIC) contract
 contract RewardJettonWallet with JettonWallet {
     balance: Int as coins = 0;
     owner: Address;
@@ -233,10 +230,10 @@ contract Alarm with Initializable {
     // When receiving Reset message, first validate the baseAsset and quoteAsset balance
     // Then send Chime message to the Oracle to update the price
     // Steps:
-    // 0. Check if the message is from Oracle
-    // 1. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
-    // 2. Send Sync message to the Oracle if time is smaller than (createdAt + validLifetime)
-    // 3. Send Chime message to the Oracle to create a new alarm
+    //      0. Check if the message is from Oracle
+    //      1. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
+    //      2. Send Sync message to the Oracle if time is smaller than (createdAt + validLifetime)
+    //      3. Send Chime message to the Oracle to create a new alarm
     receive(msg: Reset){
         let ctx: Context = context();
         self.requireOracle(ctx.sender);
@@ -461,9 +458,8 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         self.quoteAssetWallet = msg.quoteAssetWallet;
     }
 
+    // When there are any operations failed, the oracle will refund the jetton back to the TimeKeeper
     receive(msg: Refund){
-        // msg.refundQuoteAssetAmount
-        // msg.receiver
         self.requireAlarm(msg.alarmIndex);
         let ctx: Context = context();
         send(SendParameters{
@@ -677,12 +673,15 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         }
     }
 
+    // When receiving Check message, it will send the price to the sender that requested
     receive(msg: Check){
         // Protocols send Check message to query the price
         self.requireInitialized();
         require(msg.quoteIndex == 0 && msg.quoteIndex == 1, "quoteIndex must be either 0 or 1");
         let ctx: Context = context();
         let remain: Int = (((ctx.value - STORAGE_FEE) - ctx.readForwardFee()) - CHECK_FEE);
+
+        // Send baseAsset price to the sender
         if (msg.quoteIndex == 0) {
             send(SendParameters{
                     to: sender(),
@@ -698,6 +697,8 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             );
             return ;
         }
+
+        // Send quoteAsset price to the sender
         if (msg.quoteIndex == 1) {
             let latestQuoteAssetPrice: Int = float(1).div(self.latestBaseAssetPrice); // remember user should >> 64 to get the integer part
             send(SendParameters{
