@@ -34,7 +34,6 @@ extends native muldiv(self: Int, numerator: Int, denominator: Int): Int;
 message Initialize {
     baseAssetWallet: Address; // e.g. jetton wallet address for TON, which is 0
     quoteAssetWallet: Address; // e.g. jetton wallet address for USDT
-    rewardJettonContent: Cell; // reward token jetton content
 }
 message Refund {
     alarmIndex: Int as uint256; // the interacted alarm index
@@ -460,7 +459,6 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         self.is_initialized = true;
         self.baseAssetWallet = msg.baseAssetWallet;
         self.quoteAssetWallet = msg.quoteAssetWallet;
-        self.jetton_content = msg.rewardJettonContent;
     }
 
     receive(msg: Refund){

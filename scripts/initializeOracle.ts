@@ -30,7 +30,6 @@ export async function run(provider: NetworkProvider) {
             $$type: 'Initialize',
             baseAssetWallet: nullAddress,
             quoteAssetWallet: oracleUSDTWallet,
-            rewardJettonContent: beginCell().endCell(),
         }
     );
 
