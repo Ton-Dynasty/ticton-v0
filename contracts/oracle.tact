@@ -230,17 +230,18 @@ contract Alarm with Initializable {
         );
     }
 
+    // When receiving Reset message, first validate the baseAsset and quoteAsset balance
+    // Then send Chime message to the Oracle to update the price
+    // Steps:
+    // 0. Check if the message is from Oracle
+    // 1. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
+    // 2. Send Sync message to the Oracle if time is smaller than (createdAt + validLifetime)
+    // 3. Send Chime message to the Oracle to create a new alarm
     receive(msg: Reset){
-        // When receiving Reset message, first validate the baseAsset and quoteAsset balance
-        // Then send Sync message to the Oracle to update the price
-        // Steps:
-        // 0. Check if the message is from Oracle
-        // 1. increase/decrease baseAssetScale and quoteAssetScale, depends on the buyNum and quoteIndex (0 to decrease baseAssetScale and increase quoteAssetScale)
-        // 2. Send Sync message to the Oracle if time is smaller than (createdAt + validLifetime)
-        // 3. Send Chime message to the Oracle to create a new alarm
         let ctx: Context = context();
         self.requireOracle(ctx.sender);
         let remainBaseAssetAmount: Int = ((ctx.value - STORAGE_FEE) - ctx.readForwardFee());
+        // If buyNum is larger than remainScale, which means there is no enough scale to buy, so it should refund back to the TimeKeeper
         if (self.remainScale < msg.buyNum) {
             // send refund message back to oracle and exit
             send(SendParameters{
@@ -256,23 +257,18 @@ contract Alarm with Initializable {
             );
             return ;
         }
-        //let failed: Bool = false;
         let refundBaseAssetAmount: Int = 0; // 0 means return as much as possible
         let refundQuoteAssetAmount: Int = 0;
         let baseAssetPrice: Int = 0;
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
         if (msg.newBaseAssetPrice > self.baseAssetPrice) {
-            // NOTE: (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
-            
             // Buy baseAsset
             // For example, need usdt amount = (new price * (buy amount*2) + original price * buy amount)
             // need ton amount = (buy amount * 2) - the amount you buy from this alarm
             needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) + self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
             needBaseAssetAmount = msg.buyNum * MIN_BASEASSET_TRESHOLD;
         } else {
-            // NOTE: (buyNum <= remainScale <= baseAssetScale & quoteAssetScale)
-
             // Buy quoteAsset, put baseAsset into the alarm
             needQuoteAssetAmount = int((msg.newBaseAssetPrice * (msg.buyNum << 1) - self.baseAssetPrice * msg.buyNum) * MIN_BASEASSET_TRESHOLD);
             needBaseAssetAmount = msg.buyNum * 3 * MIN_BASEASSET_TRESHOLD;
@@ -281,6 +277,8 @@ contract Alarm with Initializable {
         // Check base asset and quote asset is sufficient
         refundBaseAssetAmount = (remainBaseAssetAmount - needBaseAssetAmount);
         refundQuoteAssetAmount = (msg.quoteAssetAmount - needQuoteAssetAmount);
+
+        // If refundBaseAssetAmount/refundQuoteAssetAmount is negative, then it means the TimeKeeper doesn't have enough asset to buy
         if (refundQuoteAssetAmount < 0 || refundBaseAssetAmount < 0) {
             // no enough asset to arbitrage, send refund message back to oracle and exit
             send(SendParameters{
@@ -318,6 +316,7 @@ contract Alarm with Initializable {
             self.quoteAssetScale = (self.quoteAssetScale - msg.buyNum);
             self.remainScale = (self.remainScale - msg.buyNum);
         }
+        // Send Chime message to the Oracle to create a new alarm
         send(SendParameters{
                 to: ctx.sender,
                 value: 0,
@@ -612,6 +611,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         );
     }
 
+    // When receiving Chime message, which means Timekeeper abirtrage successfully, then it will deploy a new alarm contract to record the new price
     receive(msg: Chime){
         // Should Receive Chime message from Alarm contract
         self.requireInitialized();
@@ -645,6 +645,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         // Transfer the remaining funds or profits to the TimeKeeper
         let ctx: Context = context();
         let standardRefundAmount: Int = ((ctx.value) - ctx.readForwardFee() - DEPLOY_FEE - REFUND_FEE - msg.preserveBaseAssetAmount);
+        // If remainQuoteAssetScale > 0, then send the remaining quoteAsset and also send the remain TON to the Watchmaker
         if (msg.refundQuoteAssetAmount > 0) {
             // Send Jetton Transfer message to refund
             send(SendParameters{
@@ -664,6 +665,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             );
             return ;
         }
+        // Refund TON
         if (standardRefundAmount > 0) {
             send(SendParameters{
                 to: msg.timeKeeper, 
