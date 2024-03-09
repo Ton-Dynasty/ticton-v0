@@ -44,7 +44,6 @@ describe('Oracle', () => {
                 $$type: 'Initialize',
                 baseAssetWallet: zero_address,
                 quoteAssetWallet: oracleWalletAddress,
-                rewardJettonContent: REWARD_JETTON_CONTENT,
             }
         );
         return initResult;
