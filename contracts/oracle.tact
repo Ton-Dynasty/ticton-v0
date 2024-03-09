@@ -67,15 +67,15 @@ message Sync {
     createdAt: Int;
 }
 message Ring {
-    queryID: Int;
-    alarmIndex: Int; // to get the alarm address, call getAlarm(alarmIndex)
+    queryID: Int; // The queryID of the request
+    alarmIndex: Int; // The alarm index to Ring
 }
 message Mute {
-    queryID: Int;
-    watchmaker: Address;
+    queryID: Int; // The queryID of the request
+    watchmaker: Address; // The watchmaker address to Ring the alarm
 }
 message Check {
-    queryID: Int;
+    queryID: Int; // The queryID of the request
     quoteIndex: Int; // 0 for baseAsset, 1 for quoteAsset
 }
 message Announce {
@@ -85,16 +85,16 @@ message Announce {
     price: Int;
 }
 message Chronoshift {
-    queryID: Int;
-    alarmIndex: Int;
-    createdAt: Int;
-    watchmaker: Address;
-    baseAssetPrice: Int as uint256;
-    remainScale: Int;
-    remainBaseAssetScale: Int;
-    remainQuoteAssetScale: Int;
-    extraBaseAssetAmount: Int;
-    extraQuoteAssetAmount: Int;
+    queryID: Int; // The queryID of the request
+    alarmIndex: Int; // The alarm index which is Ringed
+    createdAt: Int; // The timestamp of the alarm creation
+    watchmaker: Address; // The watchmaker address of the alarm
+    baseAssetPrice: Int as uint256; // The baseAssetPrice that watchmaker quoted
+    remainScale: Int; // The remaining scale of the alarm
+    remainBaseAssetScale: Int; // The remaining baseAsset scale of the alarm
+    remainQuoteAssetScale: Int; // The remaining quoteAsset scale of the alarm
+    extraBaseAssetAmount: Int; // The extra baseAsset amount that Watchmaker sent
+    quoteAssetAmount: Int; // The quoteAsset amount that Watchmaker used to quote
 }
 message Chime {
     alarmIndex: Int;
@@ -337,14 +337,14 @@ contract Alarm with Initializable {
         );
     }
 
+    // When recieving Mute message, it checks the sender is the Oracle
+    // and then send Chronoshift message to the Oracle.
+    // It will destroy the alarm and sending remaining funds back to the Oracle
     receive(msg: Mute){
-        // TODO: When a Watchmaker wishes to mute an alarm
-        // the alarm should reset the owner, then send Chronoshift message to the Watchmaker
-        // Meanwhile, the oracle should receive a Sync message to update the price if the scale is not 0
         require(sender() == self.oracleAddress, "Only oracle can mute an alarm");
         let ctx: Context = context();
         require(msg.watchmaker == self.watchmaker, "Only watchmaker can mute an alarm");
-        let extraBaseAssetAmount: Int = ctx.value; //abs((self.baseAssetAmount - self.baseAssetScale * MIN_BASEASSET_TRESHOLD));
+        let extraBaseAssetAmount: Int = ctx.value;
         send(SendParameters{
                 to: self.oracleAddress,
                 value: 0,
@@ -359,7 +359,7 @@ contract Alarm with Initializable {
                     remainBaseAssetScale: self.baseAssetScale,
                     remainQuoteAssetScale: self.quoteAssetScale,
                     extraBaseAssetAmount: extraBaseAssetAmount,
-                    extraQuoteAssetAmount: self.quoteAssetAmount
+                    quoteAssetAmount: self.quoteAssetAmount
                 }.toCell()
             }
         );
@@ -593,6 +593,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         }
     }
 
+    // Watchmaker sends Ring message to close the quotation (alarm)
     receive(msg: Ring){
         self.requireInitialized();
         // Watchmaker sends Ring message to Mute a specific alarm
@@ -713,6 +714,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         }
     }
 
+    // When receiving Chronoshift message, it will send the funds and rewards to the Watchmaker
     receive(msg: Chronoshift){
         self.requireInitialized();
         self.requireAlarm(msg.alarmIndex);
@@ -722,6 +724,8 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         }
         let ctx: Context = context();
         // Transfer the remaining funds and rewards to the Watchmaker
+        // If its remainQuoteAssetScale > 0, then send the remaining quoteAsset and also send the remain TON to the Watchmaker
+        // else it will send the remain TON to the Watchmaker
         if (msg.remainQuoteAssetScale > 0) {
             let sendValue: Int = ((msg.extraBaseAssetAmount  - STORAGE_FEE) - ctx.readForwardFee() - REWARD_FEE) - REFUND_FEE - TRANSFER_FEE;
             // The remain quote token is calculated by the formula:
@@ -731,7 +735,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                     mode: SendPayGasSeparately,
                     body: JettonTransfer{
                         query_id: 0,
-                        amount: msg.extraQuoteAssetAmount,
+                        amount: msg.quoteAssetAmount,
                         destination: msg.watchmaker,
                         response_destination: msg.watchmaker,
                         custom_payload: null,
@@ -752,6 +756,8 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                 }
             );
         }
+
+        // If this Ring have reward, then send the TIC to the Watchmaker
         if (rewardAmount > 0) {
             send(SendParameters{
                     to: myAddress(),
