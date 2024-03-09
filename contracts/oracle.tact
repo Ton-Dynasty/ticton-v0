@@ -168,6 +168,7 @@ contract RewardJettonWallet with JettonWallet {
     }
 }
 
+// Alarm contract is used to record the parameters of the quotation
 contract Alarm with Initializable {
     index: Int = 0;
     createdAt: Int = 0;
@@ -198,7 +199,7 @@ contract Alarm with Initializable {
         require(sender == self.oracleAddress, "Only oracle can call this function");
     }
 
-    // Init a new alarm to record the parameters
+    // Init a new alarm to record the quotation
     // This Tock message can only be sent by the Oracle
     receive(msg: Tock){
         let sender: Address = sender();
@@ -362,6 +363,8 @@ contract Alarm with Initializable {
     }
 
     // Get Methods
+
+    // Get the metadata of the alarm
     get fun getAlarmMetadata(): AlarmMetadata {
         return AlarmMetadata{
             watchmaker: self.watchmaker,
@@ -376,6 +379,8 @@ contract Alarm with Initializable {
         };
     }
 
+    // Get the estimate result of the alarm
+    // TimeKeeper can call this get method to see how much the TimeKeeper need to pay to abirtrage
     get fun getEstimate(buyNum: Int, newBaseAssetPrice: Int): EstimateResult {
         let needBaseAssetAmount: Int = 0;
         let needQuoteAssetAmount: Int = 0;
@@ -491,6 +496,8 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             return ;
         }
         require(ctx.sender == self.quoteAssetWallet, "Only oracle quoteAsset wallet can send notification to oracle");
+
+        // Parse the payload to see if it is Tick or Wind
         let payload: Slice = msg.forward_payload;
         let ref: Cell = payload.loadRef();
         let sc: Slice = ref.beginParse();
@@ -810,23 +817,30 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         return initOf Alarm(index, myAddress());
     }
 
+    // Get Methods
+
+    // Get alarm address by alarm index
     get fun getAlarmAddress(index: Int): Address {
         let initCode: StateInit = self._calculateAlarmInit(index);
         return contractAddress(initCode);
     }
 
+    // Get the total amount of alarms
     get fun TotalAmount(): Int {
         return self.totalAlarms;
     }
 
+    // Get the latest price of the baseAsset
     get fun getLatestBaseAssetPrice(): Int {
         return self.latestBaseAssetPrice;
     }
 
+    // Get Oracle's Ton balance
     get fun getMyBalance(): Int {
         return myBalance();
     }
 
+    // Get the metadata of the Oracle
     get fun getOracleData(): OracleMetadata {
         return OracleMetadata {
             base_asset_address: self.baseAsset,
