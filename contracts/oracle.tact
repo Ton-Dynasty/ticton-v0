@@ -42,7 +42,7 @@ message Refund {
 }
 message Tick {
     expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
-    baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset
+    baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset in float type
 }
 message Tock {
     alarmIndex: Int as uint256; // the interacted alarm index
@@ -201,12 +201,13 @@ contract Alarm with Initializable {
         require(sender == self.oracleAddress, "Only oracle can call this function");
     }
 
+    // Init a new alarm to record the parameters
+    // This Tock message can only be sent by the Oracle
     receive(msg: Tock){
-        // Receive a Tock message from the Oracle, should initialize the parameters
-        // This function should be called only once with contract creation
         let sender: Address = sender();
         // Check the request is valid
         self.requireNotInitialized();
+        // Check the sender is the Oracle
         self.requireOracle(sender);
         // Initialize the parameters
         self.createdAt = now();
@@ -483,6 +484,9 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
         );
     }
 
+    // After oracle receives JettonTransferNotification msg, it will first check is Tick or Wind
+    // If it is Tick, then it will check the sending ton is enough to build a new alarm by sending Tock msg.
+    // If it is Wind, then it will send Reset message to the alarm, and check whether Timekeeper can abirtrage in the alarm contract
     receive(msg: JettonTransferNotification){
         let ctx: Context = context();
         if (self.is_initialized == false) {
@@ -502,6 +506,7 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             let currentTimestamp: Int = now();
             let expireAt: Int = sc.loadUint(256);
             let baseAssetPrice: Int = sc.loadUint(256); // The first 156 bits is integer part, the last 100 bits is float part
+            // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
             if (currentTimestamp > expireAt && value > 0) {
                 // Return jetton back if gas is enough
                 if (self.quoteAssetWallet != newAddress(0, 0)) {
@@ -526,13 +531,10 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
             // Preserve the baseAssetAmount
             let needBaseAssetAmount: Int = msg.amount.float().div(baseAssetPrice);
             
+            // Oracle can accept the tolerance caused by float calculation
             let tmp: Int = ctx.readForwardFee();
-            //require(needBaseAssetAmount >= MIN_BASEASSET_TRESHOLD, "baseAssetAmount is too small");
             let tolerance: Int = needBaseAssetAmount - MIN_BASEASSET_TRESHOLD.float();
             if (tolerance < 0) {
-                // If we qoute 2.2 ton/usdt, we will get 999999999.9999999 which is less than 1 ton. So we need to add a tolerance 10000000000000
-                // 557913043479
-                // 10000000000000
                 require((-tolerance) < 10000000000000, "baseAssetAmount is too small");
                 needBaseAssetAmount = int(MIN_BASEASSET_TRESHOLD.float() + tolerance);
             }
@@ -540,7 +542,6 @@ contract OracleV0 with Deployable, Initializable, JettonMaster {
                 needBaseAssetAmount = int(needBaseAssetAmount);
             }
             
-            //require(abs(needBaseAssetAmount - msg.amount) < 1000000000, "baseAssetAmount is too small");
             require(ctx.value > (needBaseAssetAmount + 2 * ctx.readForwardFee() + STORAGE_FEE),
                 "Insufficient funds to pay for the gas"
             );
