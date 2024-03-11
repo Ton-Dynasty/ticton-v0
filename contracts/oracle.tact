@@ -51,7 +51,7 @@ message Tick {
 }
 message Tock {
     alarmIndex: Int as uint256; // the interacted alarm index
-    scale: Int as uint32; // The alarm's scale, it always equals to 1 when creating a new alarm
+    scale: Int as uint32; // The alarm's scale, it always equals to 1 when creating a new alarm, but it will be 2 times of the buyNum in the arbitraged alarm contract
     createdAt: Int; // The timestamp of the alarm creation
     watchmaker: Address; // The watchmaker address to build the alarm
     baseAssetPrice: Int; // baseAsset price relative to quoteAsset (e.g. baseAssetPrice=2.5 means 1 TON = 2.5 USDT)
