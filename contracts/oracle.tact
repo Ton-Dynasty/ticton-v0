@@ -62,7 +62,7 @@ message Wind {
     newBaseAssetPrice: Int as uint256; // new baseAsset price relative to quoteAsset in fixed point float
 }
 message Reset {
-    sender: Address; // The TimeKeeper address
+    sender: Address; // The TimeKeeper's address
     buyNum: Int; // The number of scales to buy
     quoteAssetAmount: Int; // The amount of quoteAsset oracle received
     newBaseAssetPrice: Int; // The new baseAsset price relative to quoteAsset
