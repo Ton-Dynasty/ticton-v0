@@ -138,7 +138,7 @@ struct AlarmMetadata{
     baseAssetAmount: Int; // The amount of baseAsset that the alarm have
     quoteAssetAmount: Int; // The amount of quoteAsset that the alarm have
     createdAt: Int; // The timestamp of the alarm creation
-    alarmIndex: Int; // The alarm index
+    alarmIndex: Int; // Index of the alarm
 }
 
 const BASEASSET_DECIMALS: Int = 1000000000; // 10 ** 9
