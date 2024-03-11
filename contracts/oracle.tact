@@ -99,7 +99,7 @@ message Chronoshift {
 }
 message Chime {
     alarmIndex: Int; // The alarm index which is Winded
-    timeKeeper: Address; // The TimeKeeper address
+    timeKeeper: Address; // The TimeKeeper's address
     newBaseAssetPrice: Int as uint256; // The new baseAsset price that TimeKeeper provided after arbitraging 
     newScale: Int; // It will be 2 times of the buyNum in the arbitraged alarm contract
     refundQuoteAssetAmount: Int; // The amount of quoteAsset to refund
