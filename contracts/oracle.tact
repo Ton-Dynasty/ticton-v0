@@ -126,7 +126,7 @@ struct OracleMetadata {
     isInitialized: Bool; // Check if the Oracle is initialized
     latestBaseAssetPrice: Int; // The latest price of the baseAsset
     latestTimestamp: Int; // The latest timestamp of updating the baseAsset price
-    totalAlarms: Int; // The total amount of alarms
+    totalAlarms: Int; // The total number of alarms
 }
 
 struct AlarmMetadata{
