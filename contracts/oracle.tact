@@ -69,7 +69,7 @@ message Reset {
 }
 message Ring {
     queryID: Int; // The queryID of the request
-    alarmIndex: Int; // The alarm index to Ring
+    alarmIndex: Int; // The alarm index to be muted (close the quotation)
 }
 message Mute {
     queryID: Int; // The queryID of the request
