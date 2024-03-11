@@ -47,7 +47,7 @@ message Refund {
 }
 message Tick {
     expireAt: Int as uint256; // If now() is larger than expireAt, then return the funds back to the Watchmaker if value is enough to pay the gas
-    baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset in float type
+    baseAssetPrice: Int as uint256; // baseAsset price relative to quoteAsset in fixed float type
 }
 message Tock {
     alarmIndex: Int as uint256; // the interacted alarm index
