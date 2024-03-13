@@ -1,10 +1,10 @@
 import { Alarm } from '../build/Oracle/tact_Alarm';
-import { Blockchain, SandboxContract, TreasuryContract, printTransactionFees } from '@ton-community/sandbox';
+import { Blockchain, SandboxContract, TreasuryContract } from '@ton-community/sandbox';
 import { Address, Cell, beginCell, toNano } from 'ton-core';
 import { Chime, JettonTransfer, OracleV0, Refund, Reset, Tock, storeRefund } from '../wrappers/Oracle_OracleV0';
 import { Ring, Mute, Chronoshift } from '../wrappers/Oracle_OracleV0';
-import { ExampleJettonMaster } from '../wrappers/Jetton_ExampleJettonMaster';
-import { ExampleJettonWallet } from './../build/Jetton/tact_ExampleJettonWallet';
+import { JettonMasterUSDT } from '../wrappers/JettonMaster';
+import { JettonWalletUSDT } from '../wrappers/JettonWallet';
 import Decimal from 'decimal.js';
 import { float, toToken, int } from './utils';
 import '@ton-community/test-utils';
@@ -33,7 +33,7 @@ describe('Oracle', () => {
     let oracle: SandboxContract<OracleV0>;
     let owner: SandboxContract<TreasuryContract>;
     let watchmaker: SandboxContract<TreasuryContract>;
-    let jettonMaster: SandboxContract<ExampleJettonMaster>;
+    let jettonMaster: SandboxContract<JettonMasterUSDT>;
     let zero_address: Address = new Address(0, Buffer.alloc(32));
     async function initializeOracle(oracle: SandboxContract<OracleV0>, owner: SandboxContract<TreasuryContract>) {
         const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
@@ -44,14 +44,14 @@ describe('Oracle', () => {
                 $$type: 'Initialize',
                 baseAssetWallet: zero_address,
                 quoteAssetWallet: oracleWalletAddress,
-                rewardJettonContent: REWARD_JETTON_CONTENT,
+                rewardJettonContent: beginCell().endCell(),
             }
         );
         return initResult;
     }
 
     async function mintToken(
-        jettonMaster: SandboxContract<ExampleJettonMaster>,
+        jettonMaster: SandboxContract<JettonMasterUSDT>,
         watchmaker: SandboxContract<TreasuryContract>
     ) {
         return await jettonMaster.send(watchmaker.getSender(), { value: toNano('1') }, 'Mint:1');
@@ -165,9 +165,7 @@ describe('Oracle', () => {
         };
 
         const watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
-        const watchmakerJettonContract = blockchain.openContract(
-            ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
-        );
+        const watchmakerJettonContract = blockchain.openContract(JettonWalletUSDT.fromAddress(watchmakerWalletAddress));
 
         const transferResult = await watchmakerJettonContract.send(
             watchmaker.getSender(),
@@ -222,7 +220,7 @@ describe('Oracle', () => {
             success: true,
         });
 
-        const alarm0 = blockchain.openContract(await Alarm.fromAddress(AlarmAddress));
+        const alarm0 = blockchain.openContract(Alarm.fromAddress(AlarmAddress));
         // Check that watchmaker is watchmaker
         let watchmakerAddress = (await alarm0.getGetAlarmMetadata()).watchmaker;
         expect(watchmakerAddress.toString()).toEqual(watchmaker.address.toString());
@@ -303,9 +301,7 @@ describe('Oracle', () => {
         // watchmaker's jetton wallet address
         const timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
         // watchmaker's jetton wallet
-        const timekeeperJettonContract = blockchain.openContract(
-            ExampleJettonWallet.fromAddress(timekeeperWalletAddress)
-        );
+        const timekeeperJettonContract = blockchain.openContract(JettonWalletUSDT.fromAddress(timekeeperWalletAddress));
         const windResult = await timekeeperJettonContract.send(
             timekeeper.getSender(),
             {
@@ -327,8 +323,8 @@ describe('Oracle', () => {
         watchmaker = await blockchain.treasury('watchmaker');
         blockchain.now = Math.floor(Date.now() / 1000);
         const jetton_content: Cell = beginCell().endCell();
-        jettonMaster = blockchain.openContract(await ExampleJettonMaster.fromInit(owner.address, jetton_content));
-        oracle = blockchain.openContract(await OracleV0.fromInit(zero_address, jettonMaster.address, jetton_content));
+        jettonMaster = blockchain.openContract(await JettonMasterUSDT.fromInit(owner.address, jetton_content));
+        oracle = blockchain.openContract(await OracleV0.fromInit(zero_address, jettonMaster.address));
         const deployResult = await oracle.send(
             owner.getSender(),
             {
@@ -495,9 +491,7 @@ describe('Oracle', () => {
         };
 
         const watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
-        const watchmakerJettonContract = blockchain.openContract(
-            ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
-        );
+        const watchmakerJettonContract = blockchain.openContract(JettonWalletUSDT.fromAddress(watchmakerWalletAddress));
 
         const transferResult = await watchmakerJettonContract.send(
             watchmaker.getSender(),
@@ -532,7 +526,7 @@ describe('Oracle', () => {
         const quoteAssetToTransfer1 = 4; // 4usdt
         let oracleBalanceBefore = await oracle.getGetMyBalance();
         let oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
-        let oracleJettonContract = blockchain.openContract(await ExampleJettonWallet.fromAddress(oracleWalletAddress));
+        let oracleJettonContract = blockchain.openContract(await JettonWalletUSDT.fromAddress(oracleWalletAddress));
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
         let orcleJettonBalanceAfter = (await oracleJettonContract.getGetWalletData()).balance;
         let oracleBalanceAfter = await oracle.getGetMyBalance();
@@ -667,7 +661,7 @@ describe('Oracle', () => {
         let buyNum2 = 1;
 
         let timekeeperWalletAddress = await jettonMaster.getGetWalletAddress(timekeeper.address);
-        let timekeeprWallet = blockchain.openContract(await ExampleJettonWallet.fromAddress(timekeeperWalletAddress));
+        let timekeeprWallet = blockchain.openContract(await JettonWalletUSDT.fromAddress(timekeeperWalletAddress));
         let balacenceBefore = (await timekeeprWallet.getGetWalletData()).balance;
 
         let config = {
@@ -1707,7 +1701,7 @@ describe('Oracle', () => {
             remainBaseAssetScale: 1n,
             remainQuoteAssetScale: 1n,
             extraBaseAssetAmount: toBigInt(toUSDT(2.5)),
-            extraQuoteAssetAmount: BigInt(quoteAssetToTransfer1),
+            quoteAssetAmount: BigInt(quoteAssetToTransfer1),
         };
         let chronoshiftResult = await oracle.send(
             timekeeper.getSender(),
@@ -1799,7 +1793,7 @@ describe('Oracle', () => {
         const oracleWalletAddress = await jettonMaster.getGetWalletAddress(oracle.address);
         await jettonMaster.getGetWalletAddress(timekeeper.address);
         // timekeeper's jetton wallet
-        blockchain.openContract(await ExampleJettonWallet.fromAddress(oracleWalletAddress));
+        blockchain.openContract(await JettonWalletUSDT.fromAddress(oracleWalletAddress));
         await mintToken(jettonMaster, timekeeper);
         let alarmIndexBefore = 0n;
         let buyNum = 1;
@@ -1881,7 +1875,7 @@ describe('Oracle', () => {
 
         let watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
         let watchmakerJettonWallet = blockchain.openContract(
-            await ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
+            await JettonWalletUSDT.fromAddress(watchmakerWalletAddress)
         );
         // Get the balance of watchmaker's jetton wallet
         let jettonBalanceBefore = (await watchmakerJettonWallet.getGetWalletData()).balance;
@@ -2089,9 +2083,7 @@ describe('Oracle', () => {
         // watchmaker post price to oracle
         const quoteAssetToTransfer1 = 8; // 8usdt
         const watchmakerWalletAddress = await jettonMaster.getGetWalletAddress(watchmaker.address);
-        const watchmakerJettonContract = blockchain.openContract(
-            ExampleJettonWallet.fromAddress(watchmakerWalletAddress)
-        );
+        const watchmakerJettonContract = blockchain.openContract(JettonWalletUSDT.fromAddress(watchmakerWalletAddress));
         let watchmakerBalanceBefore = (await watchmakerJettonContract.getGetWalletData()).balance;
         await tickInJettonTransfer(watchmaker, oracle, quoteAssetToTransfer1);
 

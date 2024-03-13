@@ -48,26 +48,13 @@ const toKey = (key: string) => {
     return BigInt(`0x${sha256_sync(key).toString('hex')}`);
 };
 
-// data can be either jetton content dict or NFT item index
-export function buildJettonContent(data: JettonContent | bigint): Cell {
+// data can be either jetton content dict
+export function buildJettonContent(data: JettonContent): Cell {
     let dict = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
-    if (typeof data === 'bigint') {
-        const name = `F-TonDynasty #${data}`;
-        const description = `${data}`;
-        const symbol = `F-TDT #${data}`;
-        dict.set(toKey('name'), makeSnakeCell(Buffer.from(name, 'utf8')));
-        dict.set(toKey('description'), makeSnakeCell(Buffer.from(description, 'utf8')));
-        dict.set(toKey('symbol'), makeSnakeCell(Buffer.from(symbol, 'utf8')));
-    } else {
-        Object.entries(data).forEach(([key, value]) => {
-            if (!!value) {
-                dict.set(toKey(key), makeSnakeCell(Buffer.from(value, 'utf8')));
-            }
-        });
-    }
+    Object.entries(data).forEach(([key, value]) => {
+        if (!!value) {
+            dict.set(toKey(key), makeSnakeCell(Buffer.from(value, 'utf8')));
+        }
+    });
     return beginCell().storeInt(ONCHAIN_CONTENT_PREFIX, 8).storeDict(dict).endCell();
-}
-
-export function buildNFTCollectionContent(base_url: string = NFT_BASE_URL): Cell {
-    return beginCell().storeInt(OFFCHAIN_TAG, 8).storeStringRefTail(base_url).endCell();
 }

@@ -2,7 +2,7 @@ import "@stdlib/deploy";
 import "./packages/token/jetton/JettonMaster";
 import "./packages/token/jetton/JettonWallet";
 
-contract ExampleJettonWallet with JettonWallet {
+contract JettonWalletUSDT with JettonWallet {
     balance: Int as coins = 0;
     owner: Address;
     jetton_master: Address;
@@ -12,11 +12,11 @@ contract ExampleJettonWallet with JettonWallet {
     }
 
     override inline fun calculate_jetton_wallet_init(owner_address: Address): StateInit {
-        return initOf ExampleJettonWallet(owner_address, self.jetton_master);
+        return initOf JettonWalletUSDT(owner_address, self.jetton_master);
     }
 }
 
-contract ExampleJettonMaster with JettonMaster, Deployable {
+contract JettonMasterUSDT with JettonMaster, Deployable {
     total_supply: Int as coins = 0;
     mintable: Bool = true;
     owner: Address;
@@ -40,11 +40,12 @@ contract ExampleJettonMaster with JettonMaster, Deployable {
         self._mint(ctx, msg);
     }
 
+    // override defult mint function to allow anyone to mint token by sending "Mint:1" message
     override inline fun _mint_validate(ctx: Context, msg: JettonMint) {
         require(self.mintable, "JettonMaster: Jetton is not mintable");
     }
 
     override inline fun calculate_jetton_wallet_init(owner_address: Address): StateInit {
-        return initOf ExampleJettonWallet(owner_address, myAddress());
+        return initOf JettonWalletUSDT(owner_address, myAddress());
     }
 }
